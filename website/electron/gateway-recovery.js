@@ -20,39 +20,83 @@
 // ownership rule is covered by tests independently of the Electron plumbing.
 
 /**
- * Decide how to recover an unresponsive gateway.
+ * How this app relates to the gateway on :PORT — the single source of truth for
+ * recovery decisions. Exactly one ownership state is live at a time; setting it
+ * overwrites the prior state, so no stale adopted/service classification can
+ * survive an ownership change.
+ *
+ *   spawned         — this app spawned the bundled backend on this port; recovery
+ *                     owns the child and may kill+respawn it.
+ *   adopted-local   — reuse path; the port-holder was positively identified as a
+ *                     LOCAL same-family Kiro Crew process. Not ours to kill, but
+ *                     its death is permanent (no tunnel will resurrect it), so
+ *                     recovery waits a BOUNDED interval and then respawns.
+ *   adopted-service — an adopted-local holder that is SERVICE-classified (a real
+ *                     launchd/systemd unit, or an init-reparented orphan). A
+ *                     manager may respawn it, so recovery grace-waits for a
+ *                     rebind before spawning to avoid racing the bind.
+ *   external        — a tunnel or unidentified holder, and the safe default when
+ *                     ownership is unknown: never kill or spawn locally; re-probe
+ *                     until it heals, then reconnect.
+ *
+ * @enum {string}
+ */
+const GatewayOwnership = Object.freeze({
+  SPAWNED: "spawned",
+  ADOPTED_LOCAL: "adopted-local",
+  ADOPTED_SERVICE: "adopted-service",
+  EXTERNAL: "external",
+});
+
+/**
+ * Classify a REUSE-path port-holder into an ownership state. A holder is "ours
+ * in spirit" only when the family probe matched AND the LISTEN owner is a
+ * Kiro Crew process; a "service" owner further selects the service-managed
+ * case. A tunnel, an unidentified owner, or a failed probe stays external — on
+ * Windows the owner cannot be probed, so an adopted holder classifies external
+ * there and takes the conservative reconnect path.
  *
  * @param {object} o
- * @param {boolean} o.weSpawnedGateway  true only when this app spawned the
- *                                       bundled backend on this port (spawn
- *                                       path). false on the reuse path — a
- *                                       gateway was already answering at boot
- *                                       (remote tunnel or external gateway).
- * @param {boolean} [o.reusedLocalGateway=false]  true only when the reuse
- *                                       decision positively identified the
- *                                       port-holder as a LOCAL same-family
- *                                       Kiro Crew process (localOwner
- *                                       "kirocrew"/"service" + same-family
- *                                       health). A tunnel or an unidentified
- *                                       holder never sets this.
- * @returns {"respawn" | "reconnect-bounded" | "reconnect"}
- *   "respawn"   — we own the child: kill the wedged tree, free the port, spawn a
- *                 fresh backend, re-run the boot flow.
- *   "reconnect-bounded" — we adopted a LOCAL same-family gateway we do not own.
- *                 Never kill it, but its death is not a tunnel blip: nothing
- *                 will ever bring it back, so wait a BOUNDED interval for it to
- *                 recover, then (once the port clears on its own) spawn our own
- *                 backend. Waiting forever here is the dead-window
- *                 bug: the shell classified a dead local gateway as "a gateway
- *                 we did not spawn (remote tunnel)" and never respawned.
- *   "reconnect" — genuinely external holder (tunnel / unidentified): never kill
- *                 it or spawn locally; re-probe until the external gateway /
- *                 tunnel heals, then reconnect (re-fetching a token, since the
- *                 drop likely invalidated the old one).
+ * @param {boolean} o.sameFamily  the /api/health family check matched
+ * @param {string} [o.owner]      the LISTEN owner ("kirocrew" | "service" | …)
+ * @returns {string} a {@link GatewayOwnership} value
  */
-function chooseRecoveryStrategy({ weSpawnedGateway, reusedLocalGateway = false }) {
-  if (weSpawnedGateway) return "respawn";
-  if (reusedLocalGateway) return "reconnect-bounded";
+function classifyAdoptedOwnership({ sameFamily, owner } = {}) {
+  if (!sameFamily) return GatewayOwnership.EXTERNAL;
+  if (owner === "service") return GatewayOwnership.ADOPTED_SERVICE;
+  if (owner === "kirocrew") return GatewayOwnership.ADOPTED_LOCAL;
+  return GatewayOwnership.EXTERNAL;
+}
+
+/**
+ * Decide how to recover an unresponsive gateway from its ownership state.
+ *
+ * @param {object} [o]
+ * @param {string} [o.ownership]  a {@link GatewayOwnership} value describing how
+ *                                this app relates to the port-holder. Unknown or
+ *                                falsy is treated as external — the safe,
+ *                                non-destructive default.
+ * @returns {"respawn" | "reconnect-bounded" | "reconnect"}
+ *   "respawn"           — spawned: we own the child; kill the wedged tree, free
+ *                         the port, spawn a fresh backend, re-run the boot flow.
+ *   "reconnect-bounded" — adopted-local / adopted-service: a local same-family
+ *                         gateway we do not own. Never kill it, but its death is
+ *                         not a tunnel blip, so wait a BOUNDED interval and then
+ *                         spawn once the port clears. (The service-manager rebind
+ *                         grace for adopted-service is applied by the caller.)
+ *   "reconnect"         — external/unknown: tunnel or unidentified holder; never
+ *                         kill it or spawn locally; re-probe until it heals, then
+ *                         reconnect (re-fetching a token, since the drop likely
+ *                         invalidated the old one).
+ */
+function chooseRecoveryStrategy({ ownership } = {}) {
+  if (ownership === GatewayOwnership.SPAWNED) return "respawn";
+  if (
+    ownership === GatewayOwnership.ADOPTED_LOCAL ||
+    ownership === GatewayOwnership.ADOPTED_SERVICE
+  ) {
+    return "reconnect-bounded";
+  }
   return "reconnect";
 }
 
@@ -117,6 +161,8 @@ async function waitForProcessExit({ pids, isAlive, sleep, timeoutMs = INCUMBENT_
 }
 
 module.exports = {
+  GatewayOwnership,
+  classifyAdoptedOwnership,
   chooseRecoveryStrategy,
   waitForServiceRebind,
   waitForProcessExit,

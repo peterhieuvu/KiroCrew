@@ -1,60 +1,103 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { chooseRecoveryStrategy, waitForServiceRebind, waitForProcessExit } = require("../gateway-recovery");
+const {
+  chooseRecoveryStrategy,
+  classifyAdoptedOwnership,
+  GatewayOwnership,
+  waitForServiceRebind,
+  waitForProcessExit,
+} = require("../gateway-recovery");
 
 describe("chooseRecoveryStrategy", () => {
-  it("respawns when we own the spawned gateway", () => {
-    assert.equal(chooseRecoveryStrategy({ weSpawnedGateway: true }), "respawn");
+  it("respawns when we spawned the gateway", () => {
+    assert.equal(chooseRecoveryStrategy({ ownership: GatewayOwnership.SPAWNED }), "respawn");
   });
 
   // Regression guard for the lid-close / network-switch crash: on the reuse
   // path (remote-tunnel setup) the port-holder is our SSH forward, not a
   // backend we spawned. Recovery must NOT kill the port or spawn a local
-  // backend — it must wait for the tunnel to heal and reconnect. Returning
-  // "respawn" here is exactly the bug that force-killed the tunnel and then quit
-  // the app on Retry.
-  it("reconnects (never respawns) for a gateway we did not spawn", () => {
-    assert.equal(chooseRecoveryStrategy({ weSpawnedGateway: false }), "reconnect");
+  // backend — it must wait for the tunnel to heal and reconnect.
+  it("reconnects (never respawns) for an external gateway", () => {
+    assert.equal(chooseRecoveryStrategy({ ownership: GatewayOwnership.EXTERNAL }), "reconnect");
   });
 
-  // Ownership defaults to "not ours" when unknown: the safe strategy is the
+  // Ownership defaults to external when unknown: the safe strategy is the
   // non-destructive reconnect, never a port-kill.
   it("defaults to reconnect when ownership is falsy/unknown", () => {
+    assert.equal(chooseRecoveryStrategy(), "reconnect");
     assert.equal(chooseRecoveryStrategy({}), "reconnect");
-    assert.equal(chooseRecoveryStrategy({ weSpawnedGateway: undefined }), "reconnect");
-    assert.equal(chooseRecoveryStrategy({ weSpawnedGateway: null }), "reconnect");
+    assert.equal(chooseRecoveryStrategy({ ownership: undefined }), "reconnect");
+    assert.equal(chooseRecoveryStrategy({ ownership: null }), "reconnect");
   });
 
-  // Regression guard for the adopted-gateway dead window: a relaunch adopted
-  // a same-family local gateway mid-drain; when it died, recovery classified
-  // it as "a gateway we did not spawn (remote tunnel)" and waited FOREVER for
-  // a comeback that a local process can never make on its own. An adopted
-  // LOCAL gateway must get the bounded wait-then-respawn strategy instead.
+  // Regression guard for the adopted-gateway dead window: an adopted LOCAL
+  // same-family gateway that dies never comes back on its own, so it must get
+  // the bounded wait-then-respawn strategy, not the indefinite tunnel wait.
   it("bounded reconnect-then-respawn for an adopted local same-family gateway", () => {
     assert.equal(
-      chooseRecoveryStrategy({ weSpawnedGateway: false, reusedLocalGateway: true }),
+      chooseRecoveryStrategy({ ownership: GatewayOwnership.ADOPTED_LOCAL }),
+      "reconnect-bounded",
+    );
+  });
+
+  // A service-classified adoption is still a local same-family gateway, so it
+  // takes the same bounded strategy; the manager-rebind grace is layered on by
+  // the caller, not by this decision.
+  it("bounded reconnect-then-respawn for an adopted service gateway", () => {
+    assert.equal(
+      chooseRecoveryStrategy({ ownership: GatewayOwnership.ADOPTED_SERVICE }),
       "reconnect-bounded",
     );
   });
 
   // The never-evict/never-respawn behavior is preserved ONLY for genuinely
-  // external gateways: reuse without the positive local-family identification
-  // stays on the indefinite tunnel-heal wait.
+  // external gateways: the indefinite tunnel-heal wait.
   it("keeps the indefinite reconnect for external/tunnel gateways", () => {
+    assert.equal(chooseRecoveryStrategy({ ownership: GatewayOwnership.EXTERNAL }), "reconnect");
+  });
+});
+
+describe("classifyAdoptedOwnership", () => {
+  it("maps a same-family service owner to adopted-service", () => {
     assert.equal(
-      chooseRecoveryStrategy({ weSpawnedGateway: false, reusedLocalGateway: false }),
-      "reconnect",
+      classifyAdoptedOwnership({ sameFamily: true, owner: "service" }),
+      GatewayOwnership.ADOPTED_SERVICE,
     );
-    assert.equal(chooseRecoveryStrategy({ weSpawnedGateway: false }), "reconnect");
   });
 
-  // Owning the spawned child always wins: the kill+respawn path is safe (and
-  // correct) for a process we created, regardless of any stale adoption flag.
-  it("respawn takes precedence over the adopted-local classification", () => {
+  it("maps a same-family kirocrew owner to adopted-local", () => {
     assert.equal(
-      chooseRecoveryStrategy({ weSpawnedGateway: true, reusedLocalGateway: true }),
-      "respawn",
+      classifyAdoptedOwnership({ sameFamily: true, owner: "kirocrew" }),
+      GatewayOwnership.ADOPTED_LOCAL,
     );
+  });
+
+  // A same-family probe with no positively-identified Kiro Crew owner (tunnel,
+  // unknown, or an unprobeable Windows holder) is not ours to respawn.
+  it("stays external when the owner is not a Kiro Crew process", () => {
+    assert.equal(classifyAdoptedOwnership({ sameFamily: true, owner: "none" }), GatewayOwnership.EXTERNAL);
+    assert.equal(classifyAdoptedOwnership({ sameFamily: true, owner: undefined }), GatewayOwnership.EXTERNAL);
+  });
+
+  // Not same-family = external regardless of owner.
+  it("stays external when the family probe did not match", () => {
+    assert.equal(
+      classifyAdoptedOwnership({ sameFamily: false, owner: "service" }),
+      GatewayOwnership.EXTERNAL,
+    );
+  });
+
+  // Guards the invariant the single-state model relies on: a reuse classification
+  // can never yield SPAWNED, so a classify write can never overwrite spawn ownership.
+  it("never returns SPAWNED for any input", () => {
+    for (const sameFamily of [true, false]) {
+      for (const owner of ["service", "kirocrew", "none", "", undefined]) {
+        assert.notEqual(
+          classifyAdoptedOwnership({ sameFamily, owner }),
+          GatewayOwnership.SPAWNED,
+        );
+      }
+    }
   });
 });
 
