@@ -2175,6 +2175,27 @@ class TestSuspendResearchLoopsWhileDisabled:
 
 
 class TestResearchAgentInstall:
+    #: A template whose ``allowedTools`` still carries the floor-scoped builtins,
+    #: which is what ``build_agent_config()`` really returns — ``rebuild_agent_config``
+    #: strips them on the primary spec's way to disk, so an installer that writes
+    #: the template output verbatim publishes grants the primary spec never had.
+    _TEMPLATE = {
+        "name": "kirocrew",
+        "prompt": "file://x",
+        "mcpServers": {},
+        "tools": ["fs_read", "code", "glob", "grep", "web_fetch", "@kirocrew-core"],
+        "allowedTools": ["fs_read", "code", "glob", "grep", "web_fetch", "@kirocrew-core"],
+    }
+
+    def _install(self, monkeypatch, tmp_path, *, template=None):
+        from kiro_crew import agent
+
+        monkeypatch.setattr(agent, "KIRO_AGENTS_DIR", tmp_path)
+        cfg = json.loads(json.dumps(self._TEMPLATE if template is None else template))
+        monkeypatch.setattr(agent, "build_agent_config", lambda: cfg)
+        agent._install_research_agent()
+        return json.loads((tmp_path / "kirocrew-research.json").read_text(encoding="utf-8"))
+
     def test_installs_kirocrew_research(self, monkeypatch, tmp_path):
         from kiro_crew import agent
 
@@ -2188,6 +2209,131 @@ class TestResearchAgentInstall:
         data = json.loads((tmp_path / "kirocrew-research.json").read_text(encoding="utf-8"))
         assert data["name"] == "kirocrew-research"
         assert "research" in data["prompt"].lower()
+
+    def test_floor_scoped_builtins_are_never_auto_approved(self, monkeypatch, tmp_path):
+        """``allowedTools`` skips the PreToolUse gate, so these may never land on it.
+
+        Deriving from ``build_agent_config()`` inherits the shipped template's
+        auto-approve list, and this installer used to write it verbatim — so
+        ``code`` was auto-approved for the Research Lab's unattended loop worker
+        while the primary spec filtered it out. ``code`` is the one that bites:
+        ``BUILTIN_TOOL_SCOPES`` maps it to ``filesystem.write`` because it writes
+        files AND can shell out, so an auto-approved call reached no sensitive-path
+        check, no governance rule and no SEL deny record.
+
+        Asserted against the REAL predicate, with no ceiling monkeypatched in: the
+        floor check in ``may_skip_gate`` runs before its ``ceiling is None`` early
+        return, so these four are refused on an ungoverned host too. A test that
+        stubbed a ceiling would pass while the stock install stayed broken.
+        """
+        data = self._install(monkeypatch, tmp_path)
+        for ref in ("fs_read", "code", "glob", "grep"):
+            assert ref not in data["allowedTools"], ref
+
+    def test_withheld_builtins_stay_mounted(self, monkeypatch, tmp_path):
+        """Withholding a grant must not remove the capability.
+
+        ``tools`` is what MOUNTS a tool and ``allowedTools`` only decides whether
+        it prompts, so the research worker keeps ``code`` — its calls simply reach
+        the gate, where the per-argument rule applies. Pinned because "fix" by
+        unmounting would break the agent's job instead of governing it.
+        """
+        data = self._install(monkeypatch, tmp_path)
+        for ref in ("fs_read", "code", "glob", "grep"):
+            assert ref in data["tools"], ref
+
+    def test_ungoverned_grants_survive(self, monkeypatch, tmp_path):
+        """Only the floor-scoped refs are withheld — this is not a blanket strip.
+
+        Without this, dropping the whole list would satisfy the test above while
+        silently making every research turn prompt, which on an unattended
+        autonudge loop means it stalls rather than works.
+        """
+        data = self._install(monkeypatch, tmp_path)
+        assert "web_fetch" in data["allowedTools"]
+        assert "@kirocrew-core" in data["allowedTools"]
+
+    def test_withholding_a_grant_is_audit_logged(self, monkeypatch, tmp_path):
+        """A withheld grant is a permission DECISION and must leave a record.
+
+        Attributed to the shared sanitizer rather than to this installer, because
+        the installer delegates to it rather than re-spelling the filter — that
+        attribution is the observable difference between calling the contract and
+        open-coding a local copy of it.
+        """
+        from kiro_crew.platform import governance as gov
+
+        calls: list[dict] = []
+
+        class _Recorder:
+            def log_api_access(self, **kw):
+                calls.append(kw)
+
+        monkeypatch.setattr(gov, "sel", lambda: _Recorder())
+        self._install(monkeypatch, tmp_path)
+        withheld = [c for c in calls if c.get("operation") == "mcp_auto_approve_withheld"]
+        assert len(withheld) == 1
+        assert "code" in withheld[0]["resources"]
+        assert withheld[0]["source"] == "sanitize_agent_config_governance"
+
+    def test_a_governed_servers_auto_approve_is_stripped_too(self, monkeypatch, tmp_path):
+        """The OTHER half of the same exemption, which a local filter would miss.
+
+        ``autoApprove`` on an MCP server entry is a second route to the same gate
+        bypass: kiro-cli approves an autoApproved MCP tool locally and emits no
+        permission request. ``build_agent_config`` propagates the key from a
+        managed or edition-contributed spec, so a whole-config writer that only
+        filtered ``allowedTools`` would still publish it. Delegating to the
+        sanitizer covers both halves in one call.
+
+        Needs a governed ceiling: on a stock ungoverned host ``autoApprove`` is
+        legitimately KEPT (only the floor-scoped builtins are refused
+        unconditionally), so an unstubbed run would assert the wrong thing.
+        """
+        from kiro_crew.platform import governance as gov
+
+        monkeypatch.setattr(gov, "may_skip_gate_now", lambda ref: ref != "@srv")
+        data = self._install(
+            monkeypatch,
+            tmp_path,
+            template={
+                "name": "kirocrew",
+                "prompt": "file://x",
+                "mcpServers": {"srv": {"command": "/x", "args": [], "autoApprove": ["danger"]}},
+                "tools": ["@srv"],
+                "allowedTools": [],
+            },
+        )
+        assert "autoApprove" not in data["mcpServers"]["srv"], (
+            "a governed server's autoApprove must not reach the installed spec"
+        )
+        assert "@srv" in data["tools"], "the server must still be MOUNTED"
+
+    def test_audit_failure_does_not_break_the_install(self, monkeypatch, tmp_path):
+        """The spec still lands when the audit sink is unavailable."""
+        from kiro_crew.platform import governance as gov
+
+        class _Broken:
+            def log_api_access(self, **kw):
+                raise RuntimeError("sink down")
+
+        monkeypatch.setattr(gov, "sel", lambda: _Broken())
+        data = self._install(monkeypatch, tmp_path)
+        assert data["name"] == "kirocrew-research"
+        assert "code" not in data["allowedTools"]
+
+    def test_a_template_without_allowed_tools_is_left_alone(self, monkeypatch, tmp_path):
+        """A spec with no auto-approve list is not given an empty one.
+
+        ``allowedTools`` absent and ``allowedTools: []`` are different specs to
+        kiro-cli, and the filter must not invent the key.
+        """
+        data = self._install(
+            monkeypatch,
+            tmp_path,
+            template={"name": "kirocrew", "prompt": "file://x", "mcpServers": {}, "tools": []},
+        )
+        assert "allowedTools" not in data
 
 
 # --- Watchdog unresponsive grace ---

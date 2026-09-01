@@ -87,6 +87,7 @@ from kiro_crew.platform import safe_context_call
 from kiro_crew.platform.governance import (
     CU_MCP_SERVER,
     may_skip_gate_now,
+    sanitize_agent_config_governance,
     strip_ungoverned_auto_approve,
 )
 from kiro_crew.security import is_sensitive_path
@@ -4700,6 +4701,19 @@ def _install_research_agent() -> None:
     Derives from the kirocrew agent (MCP servers, security, tools) but swaps in a
     lean research-worker prompt + identity. Used by the Research Lab app's
     autonudge loop to run one research cycle per turn.
+
+    This is a WHOLE-CONFIG writer — it persists ``build_agent_config()``'s object
+    rather than mutating one grant at a time — so it owes
+    ``sanitize_agent_config_governance`` immediately before it persists, which is
+    the contract that function states for exactly this shape. Without it the
+    shipped template's ``allowedTools`` reached disk verbatim, so
+    ``kirocrew-research.json`` auto-approved the floor-scoped builtins
+    (``fs_read``, ``code``, ``glob``, ``grep``) that ``rebuild_agent_config``
+    filters out of the primary spec. ``code`` is the sharp end: governance maps it
+    to ``filesystem.write`` because it writes files AND can shell out, and
+    ``allowedTools`` is the one path that never reaches the PreToolUse gate — so
+    those calls saw no sensitive-path check, no ceiling and no SEL record, in the
+    least supervised context in the product.
     """
     config = build_agent_config()
     config["name"] = "kirocrew-research"
@@ -4708,6 +4722,12 @@ def _install_research_agent() -> None:
         "in a Research Lab campaign loop."
     )
     config["prompt"] = _RESEARCH_SYSTEM_PROMPT
+    # Immediately before the write, per the sanitizer's contract: it covers BOTH
+    # halves of the exemption — governed `allowedTools` refs and a governed
+    # server's `autoApprove` key, which `build_agent_config` propagates from a
+    # managed or edition-contributed spec. A local re-spelling of the
+    # allowedTools half would have left the autoApprove half open.
+    sanitize_agent_config_governance(config)
     kiro_agents_dir_path().mkdir(parents=True, exist_ok=True)
     path = kiro_agents_dir_path() / _RESEARCH_AGENT_FILENAME
     _atomic_json_write(path, config)
@@ -5025,6 +5045,13 @@ def _install_conductor_agent() -> None:
         config["allowedTools"], agent_id=Path(_CONDUCTOR_AGENT_FILENAME).stem
     )
     config["permissions"] = derived if derived is not None else {"rules": []}
+    # Whole-config writer, so it owes the sanitizer immediately before the write —
+    # same contract as `_install_research_agent`. A no-op on the grant list above
+    # (already filtered through the same predicate), but it also strips a governed
+    # server's `autoApprove`, and the entries narrowed into `mcpServers` are
+    # inherited from `build_agent_config`, which propagates that key. Kept after
+    # the narrowing so it sees the map that actually ships.
+    sanitize_agent_config_governance(config)
     kiro_agents_dir_path().mkdir(parents=True, exist_ok=True)
     path = kiro_agents_dir_path() / _CONDUCTOR_AGENT_FILENAME
     _atomic_json_write(path, config)
