@@ -12,23 +12,21 @@
     "co-author"
   ],
   "highlights": [
-    "Markdown editor with the document rendered beside the source",
+    "Rich markdown editor with autosave — versions snapshot on demand",
     "AI co-author chat scoped to the document — a full Kiro Crew session with your memory and tools",
-    "The agent edits the document on disk; the editor reloads when its turn finishes",
-    "Documents are plain .md files — portable, diffable, readable by any editor"
+    "Highlight a passage to anchor a comment; the co-author addresses it and marks it for your review",
+    "Documents are artifacts, optionally backed by a real .md file on disk — portable, diffable, readable by any editor"
   ],
   "defaultEnabled": false,
   "permissions": {
     "api": [
-      "/api/apps/scribe",
-      "/api/apps/scribe/*",
       "/api/chat",
-      "/api/chat/*"
+      "/api/chat/*",
+      "/api/artifacts",
+      "/api/artifacts/*",
+      "/api/artifact-folders"
     ],
     "storage": true
-  },
-  "backend": {
-    "routes": "backend.routes:register_routes"
   },
   "ui": {
     "pages": [
@@ -54,6 +52,6 @@
     "Draft a design doc or notes in markdown while a document-scoped agent supplies implementation details from your codebase and research from your memory."
   ],
   "configuration": [
-    "Enable the app, create a document, and start a co-author session from the panel — documents are stored as plain .md files in the app's data folder."
+    "Enable the app, create a document, and start a co-author session from the panel — documents are stored as markdown artifacts, optionally backed by a file path you choose."
   ]
 }

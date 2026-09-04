@@ -1,102 +1,78 @@
-// Thin fetch wrapper for the Scribe backend.
+// Scribe's thin layer over the core artifact API.
 //
-// Routes are registered directly on the main gateway's aiohttp Application
-// (kiro_crew/apps/builtins/scribe/backend/routes.py:register_routes), so the
-// base path is /api/apps/scribe — the papyrus/issue-radar shape, NOT the
-// /apps/{name}/api reverse-proxy prefix used by child-process apps.
+// The store rework (design doc: "Content management: the artifact store")
+// deleted Scribe's own backend: documents are markdown-kind artifacts tagged
+// `scribe`, read and listed through the main `api` client. The one call kept
+// here is the save, because it needs precise 409 handling for the
+// optimistic-concurrency token (#7818) that the generic client helpers
+// flatten into a generic Error.
 //
-// This is a BUILTIN dashboard page rendered inside the main React tree, so
-// every request is a same-origin fetch carrying the dashboard's session cookie.
+// Capability detection, not a hard dependency: on gateways that predate
+// #7818, reads carry no `content_sha256` and we send no `expected_sha256` —
+// saves are last-write-wins there, with agent-always-snapshot versions as
+// the recovery net. The moment the server starts returning hashes, the
+// guard engages with no app change.
 
-const API = '/api/apps/scribe'
+import type { Artifact } from '../../types'
 
-export interface DocSummary {
-  name: string
-  /** Epoch milliseconds. */
-  mtime: number
+/** The tag that marks an artifact as a Scribe document. */
+export const SCRIBE_TAG = 'scribe'
+
+/** Thrown when a guarded save is refused (409): live content no longer
+ *  hashes to the token we read. Carries the server's current hash so the
+ *  caller can re-base without an extra round-trip. */
+export class StaleDocError extends Error {
+  constructor(
+    message: string,
+    /** Hash of the content now live on the server. */
+    readonly currentSha256: string | null,
+  ) {
+    super(message)
+  }
 }
 
-export interface DocDetail {
-  name: string
-  /** Absolute path on disk — handed to the co-author in its context note. */
-  path: string
-  content: string
-  mtime: number
+export interface SaveResult {
+  /** Token for the next guarded save; null on pre-#7818 gateways. */
+  contentSha256: string | null
+  version?: number
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(API + path, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+/** Artifact detail plus the concurrency token (absent pre-#7818). */
+export type ScribeDoc = Artifact & { content_sha256?: string | null }
+
+/** Save document content.
+ *
+ * `snapshot: false` is the autosave path — updates live state with no
+ * version bump (the store's "silent saves between snapshots").
+ * `snapshot: true` is the explicit checkpoint button.
+ */
+export async function saveDoc(
+  slug: string,
+  content: string,
+  opts: { expectedSha256?: string | null; snapshot?: boolean } = {},
+): Promise<SaveResult> {
+  const body: Record<string, unknown> = { content, snapshot: !!opts.snapshot }
+  if (opts.expectedSha256) body.expected_sha256 = opts.expectedSha256
+  const res = await fetch(`/api/artifacts/${encodeURIComponent(slug)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   })
+  if (res.status === 409) {
+    let currentSha: string | null = null
+    let detail = 'Document changed on the server'
+    try {
+      const j = (await res.json()) as { error?: string; current_sha256?: string }
+      currentSha = j.current_sha256 ?? null
+      if (j.error) detail = j.error
+    } catch { /* body shape is best-effort */ }
+    throw new StaleDocError(detail, currentSha)
+  }
   if (!res.ok) {
     let detail = ''
-    try {
-      const body = (await res.json()) as { error?: string; code?: string }
-      detail = body.error ?? ''
-      if (body.code === 'stale') throw new StaleDocError(detail)
-    } catch (e) {
-      if (e instanceof StaleDocError) throw e
-    }
+    try { detail = ((await res.json()) as { error?: string }).error ?? '' } catch { /* ignore */ }
     throw new Error(detail || `HTTP ${res.status}`)
   }
-  return (await res.json()) as T
-}
-
-/** Thrown when a save is refused because the file moved on disk (409 stale). */
-export class StaleDocError extends Error {}
-
-export const scribeApi = {
-  listDocs: () => req<{ docs: DocSummary[] }>('/docs'),
-  createDoc: (name: string) =>
-    req<{ name: string; path: string; mtime: number }>('/docs', {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    }),
-  readDoc: (name: string) => req<DocDetail>(`/doc?name=${encodeURIComponent(name)}`),
-  saveDoc: (name: string, content: string, baseMtime: number) =>
-    req<{ mtime: number }>('/doc', {
-      method: 'PUT',
-      body: JSON.stringify({ name, content, baseMtime }),
-    }),
-  getSlot: (name: string) => req<{ slot: string | null }>(`/slot?name=${encodeURIComponent(name)}`),
-  putSlot: (name: string, slot: string) =>
-    req<{ ok: boolean }>('/slot', {
-      method: 'PUT',
-      body: JSON.stringify({ name, slot }),
-    }),
-}
-
-// --- co-author slot persistence ---------------------------------------------
-//
-// The doc->slot mapping is SERVER-side (scribe's own backend, one JSON file in
-// the app data dir) so a document reopened from any browser or a fresh profile
-// reattaches to its existing co-author session. localStorage is kept only as a
-// write-through fallback for a backend that predates the /slot routes.
-
-const SLOT_KEY_PREFIX = 'kc:scribe:slot:'
-
-/** Remembered co-author slot for a document, or null. Never throws. */
-export async function loadSlot(doc: string): Promise<string | null> {
-  try {
-    const { slot } = await scribeApi.getSlot(doc)
-    if (slot) return slot
-  } catch {
-    /* backend without /slot routes — fall back below */
-  }
-  try {
-    return localStorage.getItem(SLOT_KEY_PREFIX + doc)
-  } catch {
-    return null
-  }
-}
-
-/** Remember a document's co-author chat slot (never throws). */
-export function saveSlot(doc: string, slot: string): void {
-  scribeApi.putSlot(doc, slot).catch(() => undefined)
-  try {
-    localStorage.setItem(SLOT_KEY_PREFIX + doc, slot)
-  } catch {
-    /* storage blocked or full — the server mapping still holds */
-  }
+  const j = (await res.json()) as { content_sha256?: string | null; version?: number }
+  return { contentSha256: j.content_sha256 ?? null, version: j.version }
 }

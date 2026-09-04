@@ -3374,12 +3374,12 @@
         "display_name": "Scribe",
         "description": "Write markdown documents beside an agent co-author. The co-author panel is a real Kiro Crew chat session scoped to the document, so the agent brings your memory, knowledge library, and codebase context to the draft — and can edit the document while you watch it update.",
         "page_label": "Scribe",
-        "highlight_1": "Markdown editor with the document rendered beside the source",
+        "highlight_1": "Rich markdown editor with autosave — versions snapshot on demand",
         "highlight_2": "AI co-author chat scoped to the document — a full Kiro Crew session with your memory and tools",
-        "highlight_3": "The agent edits the document on disk; the editor reloads when its turn finishes",
-        "highlight_4": "Documents are plain .md files — portable, diffable, readable by any editor",
+        "highlight_3": "Highlight a passage to anchor a comment; the co-author addresses it and marks it for your review",
+        "highlight_4": "Documents are artifacts, optionally backed by a real .md file on disk — portable, diffable, readable by any editor",
         "use_case_1": "Draft a design doc or notes in markdown while a document-scoped agent supplies implementation details from your codebase and research from your memory.",
-        "configuration_1": "Enable the app, create a document, and start a co-author session from the panel — documents are stored as plain .md files in the app's data folder."
+        "configuration_1": "Enable the app, create a document, and start a co-author session from the panel — documents are stored as markdown artifacts, optionally backed by a file path you choose."
       }
     },
     "specBuilder": {

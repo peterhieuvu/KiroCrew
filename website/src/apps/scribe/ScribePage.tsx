@@ -1,150 +1,217 @@
 /**
- * ScribePage — markdown documents with an embedded agent co-author (prototype).
+ * ScribePage — markdown documents with an embedded agent co-author.
  *
- * Three-pane layout: document list | rich markdown editor | co-author chat.
- * The prototype exists to prove the papyrus co-author spine on a markdown
- * surface:
+ * Store rework (design doc: "Content management: the artifact store"):
+ * documents are markdown-kind ARTIFACTS tagged `scribe`. The app owns only
+ * UI — storage, versions, anchored comments, and the doc↔session binding are
+ * core artifact capabilities this page calls.
  *
- *   1. `startSession()` mints a STOCK chat slot (no agent/model/memory_mode
- *      override — the default context is the point) and injects an ephemeral
- *      scoping note naming the document's absolute path.
- *   2. CoAuthorPanel mounts the real embedded ChatPage on that slot.
- *   3. On the co-author's busy→idle transition the page re-reads the document
- *      WITHOUT flushing the editor buffer — the agent just wrote the file, so
- *      the browser buffer is the stale copy (papyrus's no-flush rule).
- *
- * Deliberately absent from v0 (design doc: prototype scope): Pierre editor,
- * git, wikilinks, the memory/knowledge context rail, working_dir picker.
+ *   - Docs list  = GET /api/artifacts?tag=scribe (main api client)
+ *   - Autosave   = debounced PATCH `snapshot: false` (live state, no version
+ *                  churn; md-notebook's flushSave discipline: unmount-flush,
+ *                  dirty-stays-on-failure)
+ *   - Snapshot   = explicit PATCH `snapshot: true` (numbered version)
+ *   - Conflict   = #7818's `expected_sha256` token, capability-detected; the
+ *                  token is held in a ref FROM EDIT START (its review lesson)
+ *   - Session    = slot `artifact` binding at create; resolution filters the
+ *                  live Redux slot list (ArtifactDetailPage's pickBoundSlot
+ *                  rule) — no mapping store, survives browser profiles
+ *   - Comments   = anchored artifact comments (quote anchor) + a nudge turn
+ *                  into the co-author slot; the chat turn is the doorbell,
+ *                  the comment thread is the durable record
  *
  * PROTOTYPE NOTE: user-facing strings are plain English pending i18n catalog
  * entries — a PR blocker, not a prototype blocker.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { FilePlus2, MessageSquareText, PenLine, Save } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Camera, FilePlus2, MessageSquareText, PenLine } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store'
 import { addSlotOptimistic, fetchSlots } from '../../store/dashboardSlice'
 import { selectComposerBusy } from '../../store/chatSlice'
-import type { ChatSlot } from '../../types'
+import type { Artifact, ChatSlot } from '../../types'
 import { api } from '../../api/client'
 import RichMarkdownEditor from './RichMarkdownEditor'
 import CoAuthorPanel from './CoAuthorPanel'
 import { companionContextLines } from './companionPrompt'
-import { loadSlot, saveSlot, scribeApi, StaleDocError, type DocDetail, type DocSummary } from './api'
+import { saveDoc, StaleDocError, SCRIBE_TAG, type ScribeDoc } from './api'
+
+const AUTOSAVE_DEBOUNCE_MS = 800
+
+/** The document's active companion session: the bound slot for `slug`, or the
+ *  most recently active one if a race left more than one (ArtifactDetailPage's
+ *  pickBoundSlot rule, verbatim). */
+function pickBoundSlot(slots: ChatSlot[] | undefined, slug: string): ChatSlot | null {
+  const matches = (slots ?? []).filter(s => s.artifact === slug)
+  if (matches.length <= 1) return matches[0] ?? null
+  return [...matches].sort((a, b) =>
+    (b.last_activity_ts || '').localeCompare(a.last_activity_ts || ''))[0]
+}
 
 export default function ScribePage() {
   const dispatch = useAppDispatch()
 
-  const [docs, setDocs] = useState<DocSummary[]>([])
-  const [doc, setDoc] = useState<DocDetail | null>(null)
+  const [docs, setDocs] = useState<Artifact[]>([])
+  const [doc, setDoc] = useState<ScribeDoc | null>(null)
   const [buffer, setBuffer] = useState('')
   const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState(false)
   const [chatOpen, setChatOpen] = useState(true)
-  const [slotKey, setSlotKey] = useState<string | null>(null)
   const [slotCreating, setSlotCreating] = useState(false)
+
+  // ── Concurrency token (#7818) ────────────────────────────────────────────
+  // Held in a REF, captured when the loaded content was read — NOT re-derived
+  // at save time. Re-reading it from state at save time was the bug #7818's
+  // own review caught: a reload between edit start and save would rebase the
+  // token and let the save silently clobber what changed underneath.
+  const baseShaRef = useRef<string | null>(null)
+
+  // ── Session binding: derived, not stored ─────────────────────────────────
+  const slots = useAppSelector(s => s.dashboard.slots)
+  const slotKey = useMemo(
+    () => (doc ? pickBoundSlot(slots, doc.slug)?.key ?? null : null),
+    [slots, doc],
+  )
 
   const refreshDocs = useCallback(async () => {
     try {
-      setDocs((await scribeApi.listDocs()).docs)
+      const res = (await api.artifacts({ tag: SCRIBE_TAG })) as { artifacts: Artifact[] }
+      setDocs(res.artifacts)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }, [])
 
-  useEffect(() => {
-    void refreshDocs()
-  }, [refreshDocs])
+  useEffect(() => { void refreshDocs() }, [refreshDocs])
 
-  const openDoc = useCallback(async (name: string) => {
+  const openDoc = useCallback(async (slug: string) => {
     try {
-      const d = await scribeApi.readDoc(name)
+      const d = (await api.artifact(slug)) as ScribeDoc
       setDoc(d)
-      setBuffer(d.content)
+      setBuffer(d.content ?? '')
+      baseShaRef.current = d.content_sha256 ?? null
       setDirty(false)
       setConflict(false)
       setError(null)
-      // Reattach the document's co-author session. The mapping is server-side
-      // (survives browsers/profiles); verify the slot still EXISTS before
-      // activating it — a remembered key whose session was deleted must fall
-      // back to "Start a session", not switch the panel to a dead slot.
-      setSlotKey(null)
-      const remembered = await loadSlot(name)
-      if (remembered) {
-        try {
-          const live = (await api.chatSlots()) as ChatSlot[]
-          if (live.some(s => s.key === remembered)) setSlotKey(remembered)
-        } catch {
-          // Can't verify — optimistically reattach; switchSlot on a stale key
-          // degrades to an empty session rather than an error.
-          setSlotKey(remembered)
-        }
-      }
+      // No session lookup: `slotKey` derives from the Redux slot list via the
+      // slot's own `artifact` binding, which the WS slots event keeps fresh.
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }, [])
 
   const createDoc = useCallback(async () => {
-    const name = window.prompt('Document name (letters, digits, dots, dashes):')
+    const name = window.prompt('Document name:')
     if (!name) return
+    const sourcePath = window.prompt(
+      'File path to back it (optional — blank keeps it store-only):',
+    ) || undefined
     try {
-      await scribeApi.createDoc(name)
+      const created = (await api.createArtifact({
+        name,
+        kind: 'markdown',
+        content: `# ${name}\n`,
+        tags: [SCRIBE_TAG],
+        ...(sourcePath ? { source_path: sourcePath } : {}),
+      })) as { slug: string }
       await refreshDocs()
-      await openDoc(name)
+      await openDoc(created.slug)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }, [refreshDocs, openDoc])
 
-  const save = useCallback(async () => {
-    if (!doc) return
+  // ── Autosave: debounced flushSave (md-notebook's discipline) ──────────────
+  // One in-flight save at a time; the debounce and any explicit flush share
+  // `flushSave` so they can't double-write. On failure `dirty` STAYS set —
+  // the next keystroke or unmount retries; a conflict raises the banner.
+  const bufferRef = useRef(buffer)
+  bufferRef.current = buffer
+  const docRef = useRef(doc)
+  docRef.current = doc
+  const savingRef = useRef(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flushSave = useCallback(async (snapshot = false): Promise<boolean> => {
+    const d = docRef.current
+    if (!d || savingRef.current) return false
+    savingRef.current = true
+    setSaving(true)
+    const content = bufferRef.current
     try {
-      const res = await scribeApi.saveDoc(doc.name, buffer, doc.mtime)
-      setDoc({ ...doc, content: buffer, mtime: res.mtime })
-      setDirty(false)
+      const res = await saveDoc(d.slug, content, {
+        expectedSha256: baseShaRef.current,
+        snapshot,
+      })
+      baseShaRef.current = res.contentSha256
+      // Only clear dirty if the buffer didn't move during the await — a
+      // keystroke mid-flight means there is newer unsaved content.
+      if (bufferRef.current === content) setDirty(false)
       setConflict(false)
+      return true
     } catch (e) {
       if (e instanceof StaleDocError) {
-        // The file moved on disk (usually: the co-author wrote it while the
-        // user also typed). Surface the conflict; reload adopts the disk copy.
+        // Someone else (another window, the co-author via a path we didn't
+        // observe) changed the doc under us. Keep the stale token so every
+        // retry keeps failing loudly until the user reloads or adopts.
         setConflict(true)
       } else {
         setError(e instanceof Error ? e.message : String(e))
       }
+      return false
+    } finally {
+      savingRef.current = false
+      setSaving(false)
     }
-  }, [doc, buffer])
+  }, [])
 
-  /** Re-read the open document from disk, dropping the buffer (explicit adopt). */
-  const reloadFromDisk = useCallback(async () => {
+  const onEdit = useCallback((md: string) => {
+    setBuffer(md)
+    setDirty(true)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => { void flushSave(false) }, AUTOSAVE_DEBOUNCE_MS)
+  }, [flushSave])
+
+  // Unmount / doc-switch flush: pending debounce collapses into one final save.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      void flushSave(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc?.slug])
+
+  /** Adopt the server copy, dropping the buffer (explicit user choice). */
+  const reloadFromServer = useCallback(async () => {
     if (!doc) return
-    await openDoc(doc.name)
+    await openDoc(doc.slug)
   }, [doc, openDoc])
 
-  // Cmd/Ctrl+S saves.
+  // Cmd/Ctrl+S = snapshot (autosave already persists live state continuously).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
-        void save()
+        void flushSave(true)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [save])
+  }, [flushSave])
 
-  // --- co-author session lifecycle (papyrus's startSession, verbatim shape) --
-
+  // ── Co-author session lifecycle ───────────────────────────────────────────
   const startSession = useCallback(async (): Promise<string | null> => {
     if (!doc || slotCreating) return null
     setSlotCreating(true)
     try {
-      // No `name`: the backend mints a unique slot key. No agent/model/
-      // memory_mode overrides: the stock session's injected memory and
-      // globally-mounted tools are the entire value proposition.
+      // Stock slot (no agent/model/memory_mode override), bound to the
+      // artifact at create — the 8th argument. The binding is the entire
+      // persistence story: it rides the slot into history meta and the WS
+      // slots event, so `pickBoundSlot` reattaches from any browser.
       const created = await api.createChatSlot(
         undefined, undefined, undefined, undefined, undefined,
-        `Scribe: ${doc.name}`,
+        `Scribe: ${doc.name}`, undefined, doc.slug,
       )
       const key = created.key as string
       dispatch(addSlotOptimistic({
@@ -152,13 +219,14 @@ export default function ScribePage() {
         title: created.title || doc.name,
         messages: 0,
         running: false,
+        artifact: doc.slug,
       } as ChatSlot))
-      api.chatSlotContext(key, companionContextLines(doc.name, doc.path).join('\n'), {
-        source: 'scribe-co-author', ephemeral: true,
-      }).catch(() => undefined)
+      api.chatSlotContext(
+        key,
+        companionContextLines(doc.name, doc.slug, doc.source_path ?? null).join('\n'),
+        { source: 'scribe-co-author', ephemeral: true },
+      ).catch(() => undefined)
       dispatch(fetchSlots())
-      saveSlot(doc.name, key)
-      setSlotKey(key)
       return key
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -168,10 +236,7 @@ export default function ScribePage() {
     }
   }, [doc, slotCreating, dispatch])
 
-  // When the co-author finishes a turn, re-read the document: the agent edits
-  // it on disk, so the pane the user is watching is stale until this runs.
-  // Keyed on the busy→idle transition; `selectComposerBusy` is the store's
-  // single answer to "is this session working" (papyrus's rationale, verbatim).
+  // ── busy→idle reload (papyrus's no-flush rule, on the artifact read) ──────
   const coAuthorBusy = useAppSelector(state => selectComposerBusy(state, slotKey))
   const prevBusyRef = useRef(false)
   const dirtyRef = useRef(dirty)
@@ -182,32 +247,34 @@ export default function ScribePage() {
     if (!wasBusy || coAuthorBusy || !slotKey || !doc) return
     void (async () => {
       try {
-        const fresh = await scribeApi.readDoc(doc.name)
+        const fresh = (await api.artifact(doc.slug)) as ScribeDoc
         if (dirtyRef.current) {
-          if (fresh.content === buffer) {
-            // The buffer already matches disk (user retyped the agent's text,
-            // or the agent made no change): adopt cleanly.
+          if ((fresh.content ?? '') === bufferRef.current) {
+            // Buffer already matches the server (agent made no change, or the
+            // user typed exactly it): adopt cleanly, token included.
             setDoc(fresh)
+            baseShaRef.current = fresh.content_sha256 ?? null
             setDirty(false)
             setConflict(false)
           } else {
-            // The user typed during the agent's turn. Do NOT clobber their
-            // buffer, and do NOT adopt the fresh mtime — keeping the stale
-            // base token makes their next save 409 loudly instead of silently
-            // overwriting the agent's edit.
+            // The user typed during the agent's turn. Do NOT clobber the
+            // buffer and do NOT adopt the fresh token — the stale token makes
+            // the next autosave 409 loudly instead of silently overwriting
+            // the agent's edit.
             setConflict(true)
           }
         } else {
           setDoc(fresh)
-          setBuffer(fresh.content)
+          setBuffer(fresh.content ?? '')
+          baseShaRef.current = fresh.content_sha256 ?? null
         }
       } catch {
-        // A refresh failure is not worth a banner: the user's next save
-        // recovers, and surfacing it would blame them for the agent's turn.
+        // A refresh failure is not worth a banner: the next autosave recovers,
+        // and surfacing it would blame the user for the agent's turn.
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coAuthorBusy, slotKey, doc?.name])
+  }, [coAuthorBusy, slotKey, doc?.slug])
 
   const toggleChat = useCallback(() => {
     setChatOpen(open => {
@@ -216,11 +283,10 @@ export default function ScribePage() {
     })
   }, [slotKey, startSession])
 
-  // --- highlight → comment → co-author instruction ------------------------
-  // spec_builder's review-comment mechanism, single-doc and send-per-comment:
-  // the quote anchors by TEXT (the agent re-finds the passage with its file
-  // tools), and delivery is an ordinary user turn into the co-author slot —
-  // explicitly NOT slot-context injection, so the agent acts on it now.
+  // ── highlight → anchored comment → nudge turn ────────────────────────────
+  // The comment is the durable record (thread, REVIEW/resolve lifecycle,
+  // server-side orphan rescan on every content write); the chat turn is the
+  // doorbell that makes the co-author act on it now.
   const [commentQuote, setCommentQuote] = useState<string | null>(null)
   const [commentNote, setCommentNote] = useState('')
   const [commentSending, setCommentSending] = useState(false)
@@ -229,21 +295,25 @@ export default function ScribePage() {
     if (!doc || !commentQuote || !commentNote.trim() || commentSending) return
     setCommentSending(true)
     try {
+      await api.postArtifactComment(doc.slug, {
+        text: commentNote.trim(),
+        anchor: { quote: commentQuote },
+      })
       const key = slotKey ?? await startSession()
-      if (!key) return
-      const msg =
-        'Instruction on the document we are co-authoring — regarding this passage:\n'
-        + `> ${commentQuote.replace(/\n/g, '\n> ')}\n\n`
-        + commentNote.trim()
-      // ChatPane's send shape: abort a hung POST instead of letting it look
-      // sent for the browser's own network timeout.
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 10_000)
-      try {
-        const r = await api.sendChat(msg, key, undefined, controller.signal)
-        if (!r.ok) throw new Error(`Send failed (${r.status})`)
-      } finally {
-        clearTimeout(timeout)
+      if (key) {
+        const msg =
+          'A new comment was anchored on the document we are co-authoring. '
+          + 'Read the open comment threads with artifact_get_comments and '
+          + 'address them: act on each, reply on the thread, and advance it '
+          + 'with artifact_mark_review.'
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 10_000)
+        try {
+          const r = await api.sendChat(msg, key, undefined, controller.signal)
+          if (!r.ok) throw new Error(`Send failed (${r.status})`)
+        } finally {
+          clearTimeout(timeout)
+        }
       }
       setCommentQuote(null)
       setCommentNote('')
@@ -278,11 +348,11 @@ export default function ScribePage() {
           )}
           {docs.map(d => (
             <button
-              key={d.name}
+              key={d.slug}
               type="button"
-              onClick={() => void openDoc(d.name)}
+              onClick={() => void openDoc(d.slug)}
               className={`w-full text-left px-3 py-1.5 text-[13px] truncate cursor-pointer bg-transparent border-none transition-colors ${
-                doc?.name === d.name ? 'text-accent bg-bg-hover' : 'text-text hover:bg-bg-hover'
+                doc?.slug === d.slug ? 'text-accent bg-bg-hover' : 'text-text hover:bg-bg-hover'
               }`}
             >
               {d.name}
@@ -291,19 +361,19 @@ export default function ScribePage() {
         </div>
       </aside>
 
-      {/* Editor + preview */}
+      {/* Editor */}
       <main className="flex-1 min-w-0 flex flex-col min-h-0">
         <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border shrink-0">
           <span className="flex-1 truncate text-[13px] text-text">
             {doc ? doc.name : 'Select or create a document'}
-            {dirty ? ' •' : ''}
+            {dirty ? ' •' : saving ? ' ⋯' : ''}
           </span>
           {conflict && (
             <span className="text-[12px] text-danger flex items-center gap-2">
-              Changed on disk.
+              Changed on the server.
               <button
                 type="button"
-                onClick={() => void reloadFromDisk()}
+                onClick={() => void reloadFromServer()}
                 className="underline cursor-pointer bg-transparent border-none text-danger"
               >
                 Reload
@@ -312,12 +382,12 @@ export default function ScribePage() {
           )}
           <button
             type="button"
-            onClick={() => void save()}
-            disabled={!doc || !dirty}
-            title="Save (Cmd/Ctrl+S)"
+            onClick={() => void flushSave(true)}
+            disabled={!doc}
+            title="Snapshot a numbered version (Cmd/Ctrl+S). Autosave already persists continuously."
             className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text hover:bg-bg-hover cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
           >
-            <Save className="lucide-inline" /> Save
+            <Camera className="lucide-inline" /> Snapshot
           </button>
           <button
             type="button"
@@ -335,10 +405,7 @@ export default function ScribePage() {
           {doc ? (
             <RichMarkdownEditor
               value={buffer}
-              onChange={md => {
-                setBuffer(md)
-                setDirty(true)
-              }}
+              onChange={onEdit}
               onComment={quote => {
                 setCommentQuote(quote)
                 setCommentNote('')
@@ -363,9 +430,10 @@ export default function ScribePage() {
                   if (e.key === 'Enter') void sendComment()
                   if (e.key === 'Escape') setCommentQuote(null)
                 }}
-                // eslint-disable-next-line jsx-a11y/no-autofocus -- the composer only
+                 
                 // opens from an explicit pill click; focus continues that gesture.
                 autoFocus
+                aria-label="Comment for the co-author"
                 placeholder="What should the co-author do with this passage?"
                 className="flex-1 min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[13px] text-text outline-none focus-ring"
               />
@@ -375,7 +443,7 @@ export default function ScribePage() {
                 disabled={!commentNote.trim() || commentSending}
                 className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text hover:bg-bg-hover cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
               >
-                {commentSending ? 'Sending…' : 'Send to co-author'}
+                {commentSending ? 'Sending…' : 'Comment & notify'}
               </button>
               <button
                 type="button"
