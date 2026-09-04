@@ -4475,6 +4475,19 @@
         "configuration_1": "Öffne Task Runner, wähle Compose, From Spec oder From YAML, einen Agenten und optional einen absoluten Arbeitsbereich und prüfe dann mit Plan oder starte sofort mit Run."
       }
     },
+    "scribe": {
+      "manifest": {
+        "display_name": "Scribe",
+        "page_label": "Scribe",
+        "description": "Schreibe Markdown-Dokumente neben einem Agenten-Co-Autor. Das Co-Autor-Panel ist eine echte Kiro-Crew-Chat-Sitzung, die auf das Dokument bezogen ist: Der Agent bringt dein Gedächtnis, deine Wissensbibliothek und deinen Codebase-Kontext in den Entwurf ein — und kann das Dokument bearbeiten, während du zusiehst.",
+        "highlight_1": "Markdown-Editor mit gerendertem Dokument neben der Quelle",
+        "highlight_2": "KI-Co-Autor-Chat auf das Dokument bezogen — eine vollständige Kiro-Crew-Sitzung mit deinem Gedächtnis und deinen Tools",
+        "highlight_3": "Der Agent bearbeitet das Dokument auf der Festplatte; der Editor lädt neu, sobald sein Zug endet",
+        "highlight_4": "Dokumente sind einfache .md-Dateien — portabel, diff-fähig, von jedem Editor lesbar",
+        "use_case_1": "Entwirf ein Design-Dokument oder Notizen in Markdown, während ein dokumentbezogener Agent Implementierungsdetails aus deiner Codebase und Recherchen aus deinem Gedächtnis liefert.",
+        "configuration_1": "Aktiviere die App, erstelle ein Dokument und starte eine Co-Autor-Sitzung über das Panel — Dokumente werden als einfache .md-Dateien im Datenordner der App gespeichert."
+      }
+    },
     "specBuilder": {
       "api": {
         "phase_building": "wird umgesetzt",

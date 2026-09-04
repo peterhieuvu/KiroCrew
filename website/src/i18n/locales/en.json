@@ -3369,6 +3369,19 @@
         "configuration_1": "Open Task Runner, choose Compose, From Spec, or From YAML, select an agent and optional absolute workspace, then review with Plan or start immediately with Run."
       }
     },
+    "scribe": {
+      "manifest": {
+        "display_name": "Scribe",
+        "description": "Write markdown documents beside an agent co-author. The co-author panel is a real Kiro Crew chat session scoped to the document, so the agent brings your memory, knowledge library, and codebase context to the draft — and can edit the document while you watch it update.",
+        "page_label": "Scribe",
+        "highlight_1": "Markdown editor with the document rendered beside the source",
+        "highlight_2": "AI co-author chat scoped to the document — a full Kiro Crew session with your memory and tools",
+        "highlight_3": "The agent edits the document on disk; the editor reloads when its turn finishes",
+        "highlight_4": "Documents are plain .md files — portable, diffable, readable by any editor",
+        "use_case_1": "Draft a design doc or notes in markdown while a document-scoped agent supplies implementation details from your codebase and research from your memory.",
+        "configuration_1": "Enable the app, create a document, and start a co-author session from the panel — documents are stored as plain .md files in the app's data folder."
+      }
+    },
     "specBuilder": {
       "api": {
         "phase_building": "building",

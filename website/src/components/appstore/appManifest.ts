@@ -391,6 +391,19 @@ export const APP_MANIFEST_KEY: Record<string, ManifestKeys> = {
   // `spec-builder` ships no `highlights`, so its list is empty on both sides and
   // `appHighlights()` returns the manifest's own empty array. An entry is still
   // required: the sync gate derives keys from the app id, not from this table.
+  'scribe': {
+    displayName: 'apps.scribe.manifest.display_name',
+    description: 'apps.scribe.manifest.description',
+    pageLabel: 'apps.scribe.manifest.page_label',
+    highlights: [
+      'apps.scribe.manifest.highlight_1',
+      'apps.scribe.manifest.highlight_2',
+      'apps.scribe.manifest.highlight_3',
+      'apps.scribe.manifest.highlight_4',
+    ],
+    useCases: ['apps.scribe.manifest.use_case_1'],
+    configuration: ['apps.scribe.manifest.configuration_1'],
+  },
   'spec-builder': {
     displayName: 'apps.specBuilder.manifest.display_name',
     description: 'apps.specBuilder.manifest.description',

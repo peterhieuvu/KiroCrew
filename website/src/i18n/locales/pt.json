@@ -4500,6 +4500,19 @@
         "configuration_1": "Abra o Task Runner, escolha Compose, From Spec ou From YAML, selecione um agente e, se quiser, um workspace absoluto; depois revise com Plan ou inicie imediatamente com Run."
       }
     },
+    "scribe": {
+      "manifest": {
+        "display_name": "Scribe",
+        "page_label": "Scribe",
+        "description": "Escreva documentos markdown ao lado de um agente coautor. O painel de coautor é uma sessão de chat real do Kiro Crew focada no documento: o agente traz sua memória, sua biblioteca de conhecimento e o contexto do seu código para o rascunho — e pode editar o documento enquanto você o vê atualizar.",
+        "highlight_1": "Editor markdown com o documento renderizado ao lado da fonte",
+        "highlight_2": "Chat de coautor com IA focado no documento — uma sessão completa do Kiro Crew com sua memória e suas ferramentas",
+        "highlight_3": "O agente edita o documento no disco; o editor recarrega quando o turno dele termina",
+        "highlight_4": "Documentos são arquivos .md simples — portáteis, comparáveis e legíveis por qualquer editor",
+        "use_case_1": "Rascunhe um documento de design ou anotações em markdown enquanto um agente focado no documento fornece detalhes de implementação do seu código e pesquisas da sua memória.",
+        "configuration_1": "Ative o aplicativo, crie um documento e inicie uma sessão de coautor pelo painel — os documentos são armazenados como arquivos .md simples na pasta de dados do aplicativo."
+      }
+    },
     "specBuilder": {
       "api": {
         "phase_building": "construindo",

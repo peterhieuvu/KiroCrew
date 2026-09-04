@@ -14,6 +14,7 @@ BUILTIN_NAMES: list[str] = [
     "mochi",
     "personal_shopper",
     "pptx_maker",
+    "scribe",
     "spec_builder",
 ]
 

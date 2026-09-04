@@ -4399,6 +4399,19 @@
         "page_label": "Task Runner"
       }
     },
+    "scribe": {
+      "manifest": {
+        "display_name": "Scribe",
+        "page_label": "Scribe",
+        "description": "에이전트 공동 저자와 나란히 markdown 문서를 작성하세요. 공동 저자 패널은 문서에 스코프된 실제 Kiro Crew 채팅 세션으로, 에이전트가 당신의 메모리, 지식 라이브러리, 코드베이스 컨텍스트를 초안에 반영하고 눈앞에서 문서를 편집할 수 있습니다.",
+        "highlight_1": "소스 옆에 렌더링된 문서를 보여주는 markdown 편집기",
+        "highlight_2": "문서에 스코프된 AI 공동 저자 채팅 — 당신의 메모리와 도구를 갖춘 완전한 Kiro Crew 세션",
+        "highlight_3": "에이전트가 디스크의 문서를 편집하면 턴이 끝날 때 편집기가 다시 로드됩니다",
+        "highlight_4": "문서는 평범한 .md 파일 — 이식 가능하고 diff 가능하며 어떤 편집기로도 읽을 수 있습니다",
+        "use_case_1": "문서에 스코프된 에이전트가 코드베이스의 구현 세부 사항과 메모리의 리서치를 제공하는 동안 markdown으로 설계 문서나 메모를 작성하세요.",
+        "configuration_1": "앱을 활성화하고 문서를 만든 뒤 패널에서 공동 저자 세션을 시작하세요. 문서는 앱의 데이터 폴더에 평범한 .md 파일로 저장됩니다."
+      }
+    },
     "specBuilder": {
       "api": {
         "phase_building": "구축 중",

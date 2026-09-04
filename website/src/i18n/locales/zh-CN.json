@@ -4348,6 +4348,19 @@
         "page_label": "Task Runner"
       }
     },
+    "scribe": {
+      "manifest": {
+        "display_name": "Scribe",
+        "page_label": "Scribe",
+        "description": "在智能体共同作者旁边撰写 markdown 文档。共同作者面板是一个限定于该文档的真实 Kiro Crew 聊天会话：智能体会把你的记忆、知识库和代码库上下文带入草稿——并能在你眼前编辑文档。",
+        "highlight_1": "Markdown 编辑器,渲染结果与源码并排显示",
+        "highlight_2": "限定于文档的 AI 共同作者聊天——带有你的记忆和工具的完整 Kiro Crew 会话",
+        "highlight_3": "智能体在磁盘上编辑文档;其回合结束时编辑器自动重新加载",
+        "highlight_4": "文档是纯 .md 文件——可移植、可比对,任何编辑器都能读取",
+        "use_case_1": "用 markdown 起草设计文档或笔记,同时由限定于文档的智能体从你的代码库提供实现细节、从你的记忆提供调研结果。",
+        "configuration_1": "启用应用,创建文档,然后从面板启动共同作者会话——文档以纯 .md 文件形式存储在应用的数据文件夹中。"
+      }
+    },
     "specBuilder": {
       "api": {
         "phase_building": "构建中",
