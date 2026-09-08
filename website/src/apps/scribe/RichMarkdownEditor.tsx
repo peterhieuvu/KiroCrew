@@ -30,6 +30,8 @@ import {
   MessageSquarePlus, Minus, Redo2, SquareCode, Strikethrough, TextQuote, Undo2,
 } from 'lucide-react'
 import { IconButton } from '../../components/ui'
+import { resolveThreads, type CommentThread } from './anchors'
+import { CommentHighlights, commentHighlightsKey } from './commentHighlights'
 import './richEditor.css'
 
 interface Props {
@@ -43,6 +45,14 @@ interface Props {
    * it can attach an instruction and route it to the co-author.
    */
   onComment?: (quote: string) => void
+  /** Root comment threads to resolve and decorate. Replies and resolved
+   *  threads are skipped by the resolver. */
+  commentThreads?: CommentThread[]
+  /** Fires after each (re)resolution with ids that could NOT be located —
+   *  the local counterpart of the server's `anchor_orphaned` verdict. */
+  onThreadsResolved?: (orphanedIds: string[]) => void
+  /** A decorated range was clicked. */
+  onThreadClick?: (threadId: string) => void
   disabled?: boolean
 }
 
@@ -51,7 +61,9 @@ const MIN_QUOTE_LEN = 3
 /** Cap carried quotes so a select-all cannot flood the chat turn. */
 const MAX_QUOTE_LEN = 500
 
-export default function RichMarkdownEditor({ value, onChange, onComment, disabled }: Props) {
+export default function RichMarkdownEditor({
+  value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick, disabled,
+}: Props) {
   // Keep the latest onChange without making it an editor dependency — the
   // editor instance must survive parent re-renders or the caret dies.
   const onChangeRef = useRef(onChange)
@@ -60,12 +72,19 @@ export default function RichMarkdownEditor({ value, onChange, onComment, disable
   // equal to this is our own echo; anything else is an external change.
   const lastEmittedRef = useRef(value)
 
+  // Latest thread-click handler without re-instantiating the editor.
+  const onThreadClickRef = useRef(onThreadClick)
+  onThreadClickRef.current = onThreadClick
+
   const editor = useEditor({
     extensions: [
       // openOnClick off: a click in an editable surface places the caret; the
       // toolbar link button is the navigation affordance.
       StarterKit.configure({ link: { openOnClick: false } }),
       Markdown,
+      CommentHighlights.configure({
+        onThreadClick: (id: string) => onThreadClickRef.current?.(id),
+      }),
     ],
     content: value,
     contentType: 'markdown',
@@ -101,6 +120,21 @@ export default function RichMarkdownEditor({ value, onChange, onComment, disable
     // dirty before the user typed anything.
     editor?.setEditable(!disabled, false)
   }, [editor, disabled])
+
+  // --- comment thread resolution → decorations -----------------------------
+  // Re-resolve when the thread list changes OR external content lands (the
+  // `value` dep covers the busy→idle reload adopting an agent edit). Between
+  // resolutions, the plugin maps decorations through user typing natively.
+  const onThreadsResolvedRef = useRef(onThreadsResolved)
+  onThreadsResolvedRef.current = onThreadsResolved
+  useEffect(() => {
+    if (!editor) return
+    const { highlights, orphanedIds } = resolveThreads(editor.state.doc, commentThreads ?? [])
+    const tr = editor.state.tr.setMeta(commentHighlightsKey, highlights)
+    editor.view.dispatch(tr)
+    onThreadsResolvedRef.current?.(orphanedIds)
+     
+  }, [editor, commentThreads, value])
 
   // --- comment pill (spec_builder's selection→pill pattern, editor-native) --
   // Settled on mouseup/keyup rather than every transaction so the pill does
@@ -162,6 +196,10 @@ export default function RichMarkdownEditor({ value, onChange, onComment, disable
         <IconButton aria-label="Code block" title="Code block" disabled={disabled} onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={btnCls(editor.isActive('codeBlock'))}><SquareCode size={15} /></IconButton>
         <IconButton aria-label="Horizontal rule" title="Horizontal rule" disabled={disabled} onClick={() => editor.chain().focus().setHorizontalRule().run()} className="text-muted hover:text-text"><Minus size={15} /></IconButton>
       </div>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events --
+          Passive listeners only: the div relays clicks into the contenteditable
+          (which owns focus and keyboard) and observes selection settle for the
+          comment pill. It is not itself an interactive control. */}
       <div
         className="flex-1 min-h-0 overflow-y-auto"
         onClick={() => editor.chain().focus().run()}

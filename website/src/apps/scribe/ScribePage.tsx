@@ -34,6 +34,7 @@ import RichMarkdownEditor from './RichMarkdownEditor'
 import CoAuthorPanel from './CoAuthorPanel'
 import { companionContextLines } from './companionPrompt'
 import { saveDoc, StaleDocError, SCRIBE_TAG, type ScribeDoc } from './api'
+import type { CommentThread } from './anchors'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -59,6 +60,23 @@ export default function ScribePage() {
   const [conflict, setConflict] = useState(false)
   const [chatOpen, setChatOpen] = useState(true)
   const [slotCreating, setSlotCreating] = useState(false)
+
+  // ── Comment threads ───────────────────────────────────────────────────────
+  // Fetched with the doc, refetched when the co-author turn ends and after a
+  // send. `orphanedLocal` is the editor's own resolution verdict, unioned
+  // with the server's `anchor_orphaned` in the strip.
+  const [threads, setThreads] = useState<CommentThread[]>([])
+  const [orphanedLocal, setOrphanedLocal] = useState<string[]>([])
+  const [focusThread, setFocusThread] = useState<string | null>(null)
+
+  const fetchThreads = useCallback(async (slug: string) => {
+    try {
+      const res = (await api.artifactComments(slug)) as { comments: CommentThread[] }
+      setThreads(res.comments)
+    } catch {
+      // Comments are an overlay; a fetch failure must not block writing.
+    }
+  }, [])
 
   // ── Concurrency token (#7818) ────────────────────────────────────────────
   // Held in a REF, captured when the loaded content was read — NOT re-derived
@@ -94,12 +112,14 @@ export default function ScribePage() {
       setDirty(false)
       setConflict(false)
       setError(null)
+      setFocusThread(null)
+      void fetchThreads(slug)
       // No session lookup: `slotKey` derives from the Redux slot list via the
       // slot's own `artifact` binding, which the WS slots event keeps fresh.
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
-  }, [])
+  }, [fetchThreads])
 
   const createDoc = useCallback(async () => {
     const name = window.prompt('Document name:')
@@ -268,6 +288,8 @@ export default function ScribePage() {
           setBuffer(fresh.content ?? '')
           baseShaRef.current = fresh.content_sha256 ?? null
         }
+        // The turn may have replied to / advanced threads: refresh them.
+        void fetchThreads(doc.slug)
       } catch {
         // A refresh failure is not worth a banner: the next autosave recovers,
         // and surfacing it would blame the user for the agent's turn.
@@ -318,12 +340,34 @@ export default function ScribePage() {
       setCommentQuote(null)
       setCommentNote('')
       setChatOpen(true)
+      void fetchThreads(doc.slug)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setCommentSending(false)
     }
-  }, [doc, commentQuote, commentNote, commentSending, slotKey, startSession])
+  }, [doc, commentQuote, commentNote, commentSending, slotKey, startSession, fetchThreads])
+
+  const resolveThread = useCallback(async (id: string) => {
+    if (!doc) return
+    try {
+      await api.resolveComment(doc.slug, id)
+      void fetchThreads(doc.slug)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [doc, fetchThreads])
+
+  // Root, unresolved threads drive both the strip and (via the editor) the
+  // decorations. Orphan verdict = server flag OR local resolution miss.
+  const rootThreads = useMemo(
+    () => threads.filter(t => !t.parent_id && t.status !== 'resolved'),
+    [threads],
+  )
+  const isOrphaned = useCallback(
+    (t: CommentThread) => !!t.anchor_orphaned || orphanedLocal.includes(t.id),
+    [orphanedLocal],
+  )
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden" data-testid="scribe-page">
@@ -410,6 +454,9 @@ export default function ScribePage() {
                 setCommentQuote(quote)
                 setCommentNote('')
               }}
+              commentThreads={rootThreads}
+              onThreadsResolved={setOrphanedLocal}
+              onThreadClick={setFocusThread}
             />
           ) : (
             <div className="h-full flex items-center justify-center text-[13px] text-muted">
@@ -417,6 +464,45 @@ export default function ScribePage() {
             </div>
           )}
         </div>
+        {rootThreads.length > 0 && (
+          <div className="border-t border-border shrink-0 max-h-36 overflow-y-auto" data-testid="scribe-threads">
+            {rootThreads.map(t => (
+              <div
+                key={t.id}
+                className={`flex items-center gap-2 px-3 py-1.5 text-[12px] border-b border-border/50 last:border-b-0 ${
+                  focusThread === t.id ? 'bg-bg-hover' : ''
+                }`}
+              >
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
+                    t.status === 'review' ? 'bg-success/15 text-success' : 'bg-accent/15 text-accent'
+                  }`}
+                >
+                  {t.status}
+                </span>
+                {isOrphaned(t) && (
+                  <span
+                    className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn"
+                    title="The anchored passage no longer exists in the document"
+                  >
+                    orphaned
+                  </span>
+                )}
+                <span className="flex-1 truncate text-text" title={t.body}>
+                  {t.is_agent ? '🤖 ' : ''}{t.body}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void resolveThread(t.id)}
+                  title="Resolve this thread (human-only — the co-author can only mark it for review)"
+                  className="shrink-0 rounded-md border border-border bg-bg-elevated px-2 py-0.5 text-[11px] text-text hover:bg-bg-hover cursor-pointer transition-colors"
+                >
+                  Resolve
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {commentQuote && (
           <div className="border-t border-border px-3 py-2 shrink-0 flex flex-col gap-1.5" data-testid="scribe-comment-composer">
             <div className="text-[12px] text-muted truncate">
