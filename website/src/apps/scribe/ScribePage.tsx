@@ -30,11 +30,12 @@ import { addSlotOptimistic, fetchSlots } from '../../store/dashboardSlice'
 import { selectComposerBusy } from '../../store/chatSlice'
 import type { Artifact, ChatSlot } from '../../types'
 import { api } from '../../api/client'
-import RichMarkdownEditor from './RichMarkdownEditor'
+import RichMarkdownEditor, { type RichMarkdownEditorHandle } from './RichMarkdownEditor'
 import CoAuthorPanel from './CoAuthorPanel'
 import { companionContextLines } from './companionPrompt'
 import { saveDoc, StaleDocError, SCRIBE_TAG, type ScribeDoc } from './api'
 import type { CommentThread } from './anchors'
+import { parseSuggestion } from './suggestions'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -373,6 +374,53 @@ export default function ScribePage() {
     [orphanedLocal],
   )
 
+  // ── Proposed edits (phase 3) ──────────────────────────────────────────────
+  // A thread carries a proposal when its root or any reply holds a
+  // ```suggestion fence; the LATEST fence wins (the co-author may revise).
+  // The anchor is always the root's — that is what the proposal replaces.
+  const editorRef = useRef<RichMarkdownEditorHandle>(null)
+  const suggestionFor = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const root of rootThreads) {
+      const chain = [root, ...threads.filter(t => t.parent_id === root.id)]
+      for (const c of chain) {
+        const s = parseSuggestion(c.body)
+        if (s !== null) map.set(root.id, s) // later entries overwrite: latest wins
+      }
+    }
+    return map
+  }, [rootThreads, threads])
+
+  const acceptSuggestion = useCallback(async (root: CommentThread) => {
+    const replacement = suggestionFor.get(root.id)
+    if (!doc || !root.anchor || replacement === undefined) return
+    const applied = editorRef.current?.applySuggestion(root.anchor, replacement)
+    if (!applied) {
+      setError('Could not apply: the anchored passage no longer exists. Reject the proposal or re-anchor it.')
+      return
+    }
+    // The splice flowed through onChange → autosave. Record the decision on
+    // the thread, then close it — accept IS the human resolve.
+    try {
+      await api.replyArtifactComment(doc.slug, root.id, { text: 'Applied the suggestion.' })
+      await api.resolveComment(doc.slug, root.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+    void fetchThreads(doc.slug)
+  }, [doc, suggestionFor, fetchThreads])
+
+  const rejectSuggestion = useCallback(async (root: CommentThread) => {
+    if (!doc) return
+    try {
+      await api.replyArtifactComment(doc.slug, root.id, { text: 'Declined the suggestion.' })
+      await api.resolveComment(doc.slug, root.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+    void fetchThreads(doc.slug)
+  }, [doc, fetchThreads])
+
   return (
     <div className="flex h-full min-h-0 overflow-hidden" data-testid="scribe-page">
       {/* Document list */}
@@ -452,6 +500,7 @@ export default function ScribePage() {
         <div className="flex-1 min-h-0">
           {doc ? (
             <RichMarkdownEditor
+              ref={editorRef}
               value={buffer}
               onChange={onEdit}
               onComment={quote => {
@@ -495,14 +544,35 @@ export default function ScribePage() {
                 <span className="flex-1 truncate text-text" title={t.body}>
                   {t.is_agent ? '🤖 ' : ''}{t.body}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => void resolveThread(t.id)}
-                  title="Resolve this thread (human-only — the co-author can only mark it for review)"
-                  className="shrink-0 rounded-md border border-border bg-bg-elevated px-2 py-0.5 text-[11px] text-text hover:bg-bg-hover cursor-pointer transition-colors"
-                >
-                  Resolve
-                </button>
+                {suggestionFor.has(t.id) ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void acceptSuggestion(t)}
+                      title="Apply the proposed replacement at the anchored passage and resolve the thread"
+                      className="shrink-0 rounded-md border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] text-success hover:bg-success/20 cursor-pointer transition-colors"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void rejectSuggestion(t)}
+                      title="Decline the proposal and resolve the thread"
+                      className="shrink-0 rounded-md border border-border bg-bg-elevated px-2 py-0.5 text-[11px] text-muted hover:text-text hover:bg-bg-hover cursor-pointer transition-colors"
+                    >
+                      Reject
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void resolveThread(t.id)}
+                    title="Resolve this thread (human-only — the co-author can only mark it for review)"
+                    className="shrink-0 rounded-md border border-border bg-bg-elevated px-2 py-0.5 text-[11px] text-text hover:bg-bg-hover cursor-pointer transition-colors"
+                  >
+                    Resolve
+                  </button>
+                )}
               </div>
             ))}
           </div>

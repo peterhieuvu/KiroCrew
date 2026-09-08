@@ -53,6 +53,12 @@ All under `website/src/apps/scribe/`:
 - `commentHighlights.ts` — ProseMirror decoration plugin: rebuilt when the
   page pushes freshly-resolved threads, mapped natively through user typing
   between pushes; clicks surface the thread id.
+- `suggestions.ts` — proposed edits (phase 3): a proposal is a
+  ` ```suggestion ` fence in a thread body (root or reply, latest wins);
+  Accept re-resolves the root anchor at click time and splices the
+  replacement as an ordinary edit (single-line = plain text, multi-line =
+  markdown blocks), then replies and resolves; Reject replies and resolves.
+  Accept/reject sit on the human-only resolve path by construction.
 - `api.ts` — one raw call, `saveDoc`, kept off the shared client for precise
   409 handling; everything else uses `website/src/api/client.ts`.
 - `companionPrompt.ts` — the ephemeral scoping note: names the artifact slug,

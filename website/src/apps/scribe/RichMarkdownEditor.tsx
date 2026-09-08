@@ -21,7 +21,7 @@
  * PROTOTYPE NOTE: user-facing strings are plain English pending i18n catalog
  * entries — a PR blocker, not a prototype blocker (same status as ScribePage).
  */
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useImperativeHandle, useReducer, useRef, useState, forwardRef } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
@@ -30,8 +30,9 @@ import {
   MessageSquarePlus, Minus, Redo2, SquareCode, Strikethrough, TextQuote, Undo2,
 } from 'lucide-react'
 import { IconButton } from '../../components/ui'
-import { resolveThreads, type CommentThread } from './anchors'
+import { resolveThreads, type CommentThread, type CommentAnchor } from './anchors'
 import { CommentHighlights, commentHighlightsKey } from './commentHighlights'
+import { applySuggestion } from './suggestions'
 import './richEditor.css'
 
 interface Props {
@@ -56,14 +57,21 @@ interface Props {
   disabled?: boolean
 }
 
+/** Imperative surface for the host page (proposal accept path). */
+export interface RichMarkdownEditorHandle {
+  /** Re-resolve `anchor` NOW and splice `replacement` in as a normal edit
+   *  (flows through onChange → autosave). False = anchor orphaned. */
+  applySuggestion: (anchor: CommentAnchor, replacement: string) => boolean
+}
+
 /** Minimum selection length for the comment pill (mirrors spec_builder). */
 const MIN_QUOTE_LEN = 3
 /** Cap carried quotes so a select-all cannot flood the chat turn. */
 const MAX_QUOTE_LEN = 500
 
-export default function RichMarkdownEditor({
+const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function RichMarkdownEditor({
   value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick, disabled,
-}: Props) {
+}, ref) {
   // Keep the latest onChange without making it an editor dependency — the
   // editor instance must survive parent re-renders or the caret dies.
   const onChangeRef = useRef(onChange)
@@ -120,6 +128,14 @@ export default function RichMarkdownEditor({
     // dirty before the user typed anything.
     editor?.setEditable(!disabled, false)
   }, [editor, disabled])
+
+  // Imperative accept path: resolve-at-click and splice. Kept on a handle
+  // (not props) because it is a command, not state — the page fires it from
+  // the thread strip's Accept button.
+  useImperativeHandle(ref, () => ({
+    applySuggestion: (anchor: CommentAnchor, replacement: string) =>
+      editor ? applySuggestion(editor, anchor, replacement) : false,
+  }), [editor])
 
   // --- comment thread resolution → decorations -----------------------------
   // Re-resolve when the thread list changes OR external content lands (the
@@ -196,7 +212,7 @@ export default function RichMarkdownEditor({
         <IconButton aria-label="Code block" title="Code block" disabled={disabled} onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={btnCls(editor.isActive('codeBlock'))}><SquareCode size={15} /></IconButton>
         <IconButton aria-label="Horizontal rule" title="Horizontal rule" disabled={disabled} onClick={() => editor.chain().focus().setHorizontalRule().run()} className="text-muted hover:text-text"><Minus size={15} /></IconButton>
       </div>
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events --
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions --
           Passive listeners only: the div relays clicks into the contenteditable
           (which owns focus and keyboard) and observes selection settle for the
           comment pill. It is not itself an interactive control. */}
@@ -229,4 +245,6 @@ export default function RichMarkdownEditor({
       )}
     </div>
   )
-}
+})
+
+export default RichMarkdownEditor

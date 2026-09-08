@@ -41,22 +41,30 @@ vi.mock('../apps/scribe/api', async (orig) => {
 
 vi.mock('../api/client', () => ({ api: apiMock }))
 
-// Editor stub: surfaces onChange / onComment / threads as pokeable controls.
-vi.mock('../apps/scribe/RichMarkdownEditor', () => ({
-  default: ({ onChange, onComment, commentThreads, onThreadsResolved }: {
-    onChange: (md: string) => void
-    onComment?: (q: string) => void
-    commentThreads?: { id: string }[]
-    onThreadsResolved?: (ids: string[]) => void
-  }) => (
-    <div data-testid="editor-stub">
-      <button type="button" onClick={() => onChange('# doc\n\nedited')}>stub-type</button>
-      <button type="button" onClick={() => onComment?.('a quoted passage')}>stub-select</button>
-      <button type="button" onClick={() => onThreadsResolved?.(['t2'])}>stub-orphan-t2</button>
-      <span data-testid="thread-count">{commentThreads?.length ?? 0}</span>
-    </div>
-  ),
-}))
+// Editor stub: surfaces onChange / onComment / threads as pokeable controls,
+// and (phase 3) an imperative applySuggestion recorded on the mock.
+const applySuggestionMock = vi.hoisted(() => vi.fn().mockReturnValue(true))
+vi.mock('../apps/scribe/RichMarkdownEditor', async () => {
+  const React = await import('react')
+  return {
+    default: React.forwardRef(function Stub({ onChange, onComment, commentThreads, onThreadsResolved }: {
+      onChange: (md: string) => void
+      onComment?: (q: string) => void
+      commentThreads?: { id: string }[]
+      onThreadsResolved?: (ids: string[]) => void
+    }, ref: React.Ref<unknown>) {
+      React.useImperativeHandle(ref, () => ({ applySuggestion: applySuggestionMock }))
+      return (
+        <div data-testid="editor-stub">
+          <button type="button" onClick={() => onChange('# doc\n\nedited')}>stub-type</button>
+          <button type="button" onClick={() => onComment?.('a quoted passage')}>stub-select</button>
+          <button type="button" onClick={() => onThreadsResolved?.(['t2'])}>stub-orphan-t2</button>
+          <span data-testid="thread-count">{commentThreads?.length ?? 0}</span>
+        </div>
+      )
+    }),
+  }
+})
 vi.mock('../apps/scribe/CoAuthorPanel', () => ({
   default: () => <div data-testid="coauthor-stub" />,
 }))
@@ -166,6 +174,65 @@ describe('threads strip', () => {
     expect(screen.queryByText('orphaned')).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('stub-orphan-t2'))
     expect(screen.getByText('orphaned')).toBeInTheDocument()
+  })
+})
+
+const apiMockExt = apiMock as typeof apiMock & { replyArtifactComment: ReturnType<typeof vi.fn> }
+
+describe('proposed edits (phase 3)', () => {
+  const PROPOSAL_THREADS = [
+    {
+      id: 'p1', body: 'tighten this', status: 'review',
+      anchor: { quote: 'the anchored passage' },
+    },
+    {
+      id: 'p2', body: 'Here you go:\n```suggestion\ntightened text\n```',
+      status: 'review', parent_id: 'p1', anchor: null,
+    },
+    { id: 'n1', body: 'plain question, no proposal', status: 'open', anchor: { quote: 'q' } },
+  ]
+
+  beforeEach(() => {
+    apiMockExt.replyArtifactComment = vi.fn().mockResolvedValue({})
+    ;(apiMock as Record<string, unknown>).replyArtifactComment = apiMockExt.replyArtifactComment
+    apiMock.artifactComments.mockResolvedValue({ comments: PROPOSAL_THREADS })
+    applySuggestionMock.mockClear().mockReturnValue(true)
+  })
+
+  it('threads with a suggestion show Accept/Reject; plain threads keep Resolve', async () => {
+    await openDoc()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Resolve' })).toHaveLength(1) // n1 only
+  })
+
+  it('Accept applies at the ROOT anchor, replies, resolves, refetches', async () => {
+    await openDoc()
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    expect(applySuggestionMock).toHaveBeenCalledWith(
+      { quote: 'the anchored passage' }, 'tightened text',
+    )
+    expect(apiMockExt.replyArtifactComment).toHaveBeenCalledWith('notes', 'p1', { text: 'Applied the suggestion.' })
+    expect(apiMock.resolveComment).toHaveBeenCalledWith('notes', 'p1')
+  })
+
+  it('Accept on an orphaned anchor surfaces the error and leaves the thread open', async () => {
+    applySuggestionMock.mockReturnValue(false)
+    await openDoc()
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    expect(screen.getByText(/Could not apply/)).toBeInTheDocument()
+    expect(apiMock.resolveComment).not.toHaveBeenCalled()
+  })
+
+  it('Reject replies and resolves without touching the editor', async () => {
+    await openDoc()
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    expect(applySuggestionMock).not.toHaveBeenCalled()
+    expect(apiMockExt.replyArtifactComment).toHaveBeenCalledWith('notes', 'p1', { text: 'Declined the suggestion.' })
+    expect(apiMock.resolveComment).toHaveBeenCalledWith('notes', 'p1')
   })
 })
 

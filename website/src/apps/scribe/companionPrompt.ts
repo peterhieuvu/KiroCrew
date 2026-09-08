@@ -34,6 +34,13 @@ export function companionContextLines(
       + ' comments, read them with artifact_get_comments, act on each open'
       + ' thread, reply on the thread, and advance it with'
       + ' artifact_mark_review — never resolve threads yourself.',
+    'When the author asks for a PROPOSAL rather than an edit (words like'
+      + ' "suggest", "propose", "what would you change"), do NOT call'
+      + ' artifact_update. Reply on the anchored thread with a suggestion'
+      + ' fence carrying the exact replacement text for the quoted passage:'
+      + ' a line ```suggestion, the replacement, then ```. Then advance the'
+      + ' thread with artifact_mark_review. The author accepts or rejects it'
+      + ' from the editor.',
     'You have the author\'s memory, lessons, and knowledge tools: use them to'
       + ' supply implementation details and prior decisions when drafting.',
   ]
