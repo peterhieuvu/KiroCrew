@@ -193,11 +193,15 @@ export default function ScribePage() {
     debounceRef.current = setTimeout(() => { void flushSave(false) }, AUTOSAVE_DEBOUNCE_MS)
   }, [flushSave])
 
-  // Unmount / doc-switch flush: pending debounce collapses into one final save.
+  // Unmount / doc-switch flush: pending debounce collapses into one final
+  // save — but ONLY when there is unsaved work. Unconditional flushing made
+  // every doc OPEN fire a save of just-loaded content (the effect re-runs on
+  // the null→slug transition and its cleanup ran flushSave) — caught by
+  // ScribePage.test.tsx's "not called yet" assertion.
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      void flushSave(false)
+      if (dirtyRef.current) void flushSave(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc?.slug])
