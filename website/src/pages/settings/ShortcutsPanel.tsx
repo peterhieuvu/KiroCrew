@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { formatShortcut, IS_MAC, shortcutLabel } from '../../hooks/useKeyboardShortcuts'
 import { SHORTCUT_GROUPS, ShortcutRow, KeyCapSequence, GlobalHotkeyRow, PANEL_TOGGLE_LABEL_KEY, groupShortcuts, shortcutGroupLabel, useShortcutPrefs } from '../../components/ShortcutsModal'
 import { SettingsSection, SettingsCard, SettingsToggle, SettingsButtonGroup } from '../../components/settings'
@@ -6,6 +8,7 @@ import { usePanelToggleShortcuts } from '../../hooks/usePanelToggleShortcuts'
 import { useGlobalHotkey } from '../../hooks/useGlobalHotkey'
 import { formatChordKeys, type QuickSearchMode } from '../../lib/quickSearchShortcut'
 import { PANEL_TOGGLE_IDS, PANEL_TOGGLES_SKIPPING_SHELL } from '../../lib/panelToggleShortcuts'
+import { getVimNavEnabled, setVimNavEnabled, VIM_BINDINGS } from '../../lib/vimNav'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { Btn } from '../../components/ui'
 
@@ -127,6 +130,44 @@ function PanelToggleConfig() {
 }
 
 /**
+ * Editor for vim-style navigation: the opt-in toggle, and the binding
+ * reference rendered from {@link VIM_BINDINGS} — the same table the
+ * dispatcher's tests pin, so this reference cannot drift from behavior. Rows
+ * appear only while the feature is on: an inert cheat-sheet under an off
+ * toggle reads as a bug, not as documentation.
+ */
+function VimNavConfig() {
+  const [vimEnabled, setVimEnabled] = useState(getVimNavEnabled)
+  const toggleVim = (v: boolean) => {
+    setVimNavEnabled(v)
+    setVimEnabled(v)
+  }
+  return (
+    <>
+      <SettingsToggle
+        label={i18nT('pages.settings.shortcutsPanel.enable_vim_navigation')}
+        description={i18nT('pages.settings.shortcutsPanel.vim_navigation_description')}
+        checked={vimEnabled}
+        onChange={toggleVim}
+      />
+      {vimEnabled && VIM_BINDINGS.map(row => (
+        <div key={row.id} className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-bg-hover transition-colors">
+          <span className="text-[13px] text-text">{i18nT(row.labelKey)}</span>
+          <span className="flex items-center gap-1.5">
+            {row.caps.map((alt, i) => (
+              <span key={i} className="flex items-center gap-1.5">
+                {i > 0 && <span className="text-muted text-[11px]">{i18nT('pages.settings.shortcutsPanel.vim_binding_or')}</span>}
+                <span className="flex items-center gap-1"><KeyCapSequence caps={alt} plus /></span>
+              </span>
+            ))}
+          </span>
+        </div>
+      ))}
+    </>
+  )
+}
+
+/**
  * Settings → Shortcuts. Same data + preference state as the Alt+K
  * `ShortcutsModal` (shared primitives from ShortcutsModal.tsx), presented in
  * the standard Settings layout: a `SettingsSection` header per shortcut group
@@ -181,6 +222,10 @@ export function ShortcutsPanel() {
       <SettingsSection title={i18nT('pages.settings.shortcutsPanel.panel_toggles')} />
       <SettingsCard index={SHORTCUT_GROUPS.length + 2}>
         <PanelToggleConfig />
+      </SettingsCard>
+      <SettingsSection title={i18nT('pages.settings.shortcutsPanel.vim_navigation')} />
+      <SettingsCard index={SHORTCUT_GROUPS.length + 3}>
+        <VimNavConfig />
       </SettingsCard>
       {globalHotkey && (
         <div>

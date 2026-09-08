@@ -7970,6 +7970,9 @@
       "turn_on": "このプレビューをオンにする",
       "screenshot_badge": "スクリーンショット",
       "is_on": "このプレビューはオンです。オフにしても隠れるだけで、作成したものは失われません"
+    },
+    "vimNavIndicator": {
+      "normal_mode": "NAV"
     }
   },
   "hooks": {
@@ -13106,7 +13109,16 @@
         "use_ctrl_not_option_for_chat_1_9": "チャット 1～9 に ⌃ Ctrl（⌥ Option ではなく）を使用します",
         "clear_shortcut": "クリア",
         "panel_toggles": "パネルの表示切り替え",
-        "skips_shell_hint": "ターミナル内でも動作するため、シェルはこのキーを受け取らなくなります。Ctrl+C や Ctrl+R は選ばないでください。"
+        "skips_shell_hint": "ターミナル内でも動作するため、シェルはこのキーを受け取らなくなります。Ctrl+C や Ctrl+R は選ばないでください。",
+        "vim_navigation": "Vim ナビゲーション",
+        "enable_vim_navigation": "Vim ナビゲーションを有効にする",
+        "vim_navigation_description": "モードレスな vim スタイルのキー操作: Esc または Ctrl+[ でメッセージ欄を離れ、J/K でセッションを切り替え、I で入力に戻り、/ で検索を開きます",
+        "vim_binding_or": "または",
+        "vim_exit_insert": "メッセージ欄を離れる",
+        "vim_focus_composer": "メッセージ欄にフォーカス",
+        "vim_next_session": "次のセッション",
+        "vim_prev_session": "前のセッション",
+        "vim_open_search": "検索を開く"
       },
       "skillsPanel": {
         "analyze_each_completed_session_and_draft_a_reusa": "完了したセッションを分析し、繰り返し使われる手順 — 将来のセッションが別の対象に対して再び実行するような手順 — が示されたときに再利用可能な SKILL.md を作成します。デフォルトではオフです。ドラフトはスキルタブの保留キューにステージされます。レビュー用です。何もライブにはなりません（以下を参照してください）。",

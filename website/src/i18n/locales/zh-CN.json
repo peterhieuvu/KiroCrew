@@ -7970,6 +7970,9 @@
       "turn_on": "开启此预览",
       "screenshot_badge": "截图",
       "is_on": "此预览已开启。关闭只会把它隐藏起来，你创建的内容不会丢失"
+    },
+    "vimNavIndicator": {
+      "normal_mode": "NAV"
     }
   },
   "hooks": {
@@ -13106,7 +13109,16 @@
         "use_ctrl_not_option_for_chat_1_9": "聊天 1–9 使用 ⌃ Ctrl（而不是 ⌥ Option）",
         "clear_shortcut": "清除",
         "panel_toggles": "面板开关",
-        "skips_shell_hint": "在终端内也会生效，因此 shell 将不再收到该按键——请不要选择 Ctrl+C 或 Ctrl+R。"
+        "skips_shell_hint": "在终端内也会生效，因此 shell 将不再收到该按键——请不要选择 Ctrl+C 或 Ctrl+R。",
+        "vim_navigation": "Vim 导航",
+        "enable_vim_navigation": "启用 Vim 导航",
+        "vim_navigation_description": "无模式的 vim 风格按键：Esc 或 Ctrl+[ 离开消息框，J/K 切换会话，I 返回输入，/ 打开搜索",
+        "vim_binding_or": "或",
+        "vim_exit_insert": "离开消息框",
+        "vim_focus_composer": "聚焦消息框",
+        "vim_next_session": "下一个会话",
+        "vim_prev_session": "上一个会话",
+        "vim_open_search": "打开搜索"
       },
       "skillsPanel": {
         "analyze_each_completed_session_and_draft_a_reusa": "分析每个已完成会话，当该会话展示出会复现的流程（即未来会话在处理不同目标时仍会再次执行的流程）时起草可复用 SKILL.md。默认关闭。草稿会暂存到“技能”标签页的待审队列中供审阅 — 未经你批准不会生效（见下文）。",

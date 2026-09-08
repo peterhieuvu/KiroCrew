@@ -8194,6 +8194,9 @@
       "turn_on": "Ligar esta prévia",
       "screenshot_badge": "Captura de tela",
       "is_on": "Esta prévia está ligada — desligar só a esconde, nada do que você criou se perde"
+    },
+    "vimNavIndicator": {
+      "normal_mode": "NAV"
     }
   },
   "hooks": {
@@ -13454,7 +13457,16 @@
         "use_ctrl_not_option_for_chat_1_9": "Usar ⌃ Ctrl (não ⌥ Option) para chats 1–9",
         "clear_shortcut": "Limpar",
         "panel_toggles": "Alternar painéis",
-        "skips_shell_hint": "Também funciona dentro do terminal, por isso o seu shell deixa de receber esta tecla — não escolha Ctrl+C nem Ctrl+R."
+        "skips_shell_hint": "Também funciona dentro do terminal, por isso o seu shell deixa de receber esta tecla — não escolha Ctrl+C nem Ctrl+R.",
+        "vim_navigation": "Navegação vim",
+        "enable_vim_navigation": "Ativar navegação vim",
+        "vim_navigation_description": "Teclas no estilo vim sem modos: Esc ou Ctrl+[ sai da caixa de mensagem, J/K alternam sessões, I volta à digitação, / abre a pesquisa",
+        "vim_binding_or": "ou",
+        "vim_exit_insert": "Sair da caixa de mensagem",
+        "vim_focus_composer": "Focar a caixa de mensagem",
+        "vim_next_session": "Próxima sessão",
+        "vim_prev_session": "Sessão anterior",
+        "vim_open_search": "Abrir pesquisa"
       },
       "skillsPanel": {
         "analyze_each_completed_session_and_draft_a_reusa": "Analisa cada sessão concluída e cria um rascunho de SKILL.md reutilizável quando ela demonstra um procedimento recorrente — um que uma sessão futura, trabalhando em um alvo diferente, executaria novamente. Desativado por padrão. Os rascunhos vão para a fila de pendentes na aba Habilidades para revisão — nada entra em vigor sem a sua aprovação (veja abaixo).",

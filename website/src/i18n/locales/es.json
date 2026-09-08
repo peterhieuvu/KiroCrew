@@ -8194,6 +8194,9 @@
       "turn_on": "Activar esta vista previa",
       "screenshot_badge": "Captura",
       "is_on": "Esta vista previa está activada: desactivarla solo la oculta, no se pierde nada de lo que hayas creado"
+    },
+    "vimNavIndicator": {
+      "normal_mode": "NAV"
     }
   },
   "hooks": {
@@ -13455,7 +13458,16 @@
         "use_ctrl_not_option_for_chat_1_9": "Usar ⌃ Ctrl (no ⌥ Option) para los chats 1–9",
         "clear_shortcut": "Borrar",
         "panel_toggles": "Alternar paneles",
-        "skips_shell_hint": "También funciona dentro del terminal, por lo que tu shell deja de recibir esta tecla: no elijas Ctrl+C ni Ctrl+R."
+        "skips_shell_hint": "También funciona dentro del terminal, por lo que tu shell deja de recibir esta tecla: no elijas Ctrl+C ni Ctrl+R.",
+        "vim_navigation": "Navegación vim",
+        "enable_vim_navigation": "Activar navegación vim",
+        "vim_navigation_description": "Teclas estilo vim sin modos: Esc o Ctrl+[ sale del cuadro de mensaje, J/K cambian de sesión, I vuelve a escribir, / abre la búsqueda",
+        "vim_binding_or": "o",
+        "vim_exit_insert": "Salir del cuadro de mensaje",
+        "vim_focus_composer": "Enfocar el cuadro de mensaje",
+        "vim_next_session": "Sesión siguiente",
+        "vim_prev_session": "Sesión anterior",
+        "vim_open_search": "Abrir búsqueda"
       },
       "skillsPanel": {
         "analyze_each_completed_session_and_draft_a_reusa": "Analiza cada sesión completada y redacta un SKILL.md reutilizable cuando la sesión demuestra un procedimiento recurrente — uno que una sesión futura, trabajando sobre un objetivo distinto, volvería a ejecutar. Desactivado por defecto. Los borradores pasan a la cola de pendientes de la pestaña Habilidades para su revisión — nada se activa sin tu aprobación (ver más abajo).",

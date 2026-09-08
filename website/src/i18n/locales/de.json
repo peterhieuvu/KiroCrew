@@ -8082,6 +8082,9 @@
       "turn_on": "Diese Vorschau einschalten",
       "screenshot_badge": "Screenshot",
       "is_on": "Diese Vorschau ist an – Ausschalten blendet sie nur aus, nichts Erstelltes geht verloren"
+    },
+    "vimNavIndicator": {
+      "normal_mode": "NAV"
     }
   },
   "hooks": {
@@ -13280,7 +13283,16 @@
         "use_ctrl_not_option_for_chat_1_9": "⌃ Strg (nicht ⌥ Option) für Chat 1–9 verwenden",
         "clear_shortcut": "Leeren",
         "panel_toggles": "Panels umschalten",
-        "skips_shell_hint": "Funktioniert auch im Terminal, sodass Ihre Shell diese Taste nicht mehr erhält — wählen Sie nicht Strg+C oder Strg+R."
+        "skips_shell_hint": "Funktioniert auch im Terminal, sodass Ihre Shell diese Taste nicht mehr erhält — wählen Sie nicht Strg+C oder Strg+R.",
+        "vim_navigation": "Vim-Navigation",
+        "enable_vim_navigation": "Vim-Navigation aktivieren",
+        "vim_navigation_description": "Moduslose Vim-Tasten: Esc oder Strg+[ verlässt das Eingabefeld, J/K wechseln Sitzungen, I kehrt zur Eingabe zurück, / öffnet die Suche",
+        "vim_binding_or": "oder",
+        "vim_exit_insert": "Eingabefeld verlassen",
+        "vim_focus_composer": "Eingabefeld fokussieren",
+        "vim_next_session": "Nächste Sitzung",
+        "vim_prev_session": "Vorherige Sitzung",
+        "vim_open_search": "Suche öffnen"
       },
       "skillsPanel": {
         "analyze_each_completed_session_and_draft_a_reusa": "Jede abgeschlossene Sitzung analysieren und eine wiederverwendbare SKILL.md entwerfen, wenn die Sitzung ein wiederkehrendes Verfahren zeigt — eines, das eine künftige Sitzung an einem anderen Ziel erneut ausführen würde. Standardmäßig aus. Entwürfe werden in der Warteschlange auf dem Tab „Skills“ zur Überprüfung bereitgestellt — nichts geht ohne Ihre Genehmigung live (siehe unten).",

@@ -141,10 +141,12 @@ import { useNavShortcutHint } from './hooks/useNavShortcutHint'
 import { useInstanceShortcuts } from './hooks/useInstanceShortcuts'
 import { useAutoConnectInstances } from './hooks/useAutoConnectInstances'
 import { useCommandPalette } from './hooks/useCommandPalette'
+import { useVimNav } from './hooks/useVimNav'
 import { useProvider } from './providers/context'
 import { useAgents } from './hooks/useAgents'
 import ShortcutsModal from './components/ShortcutsModal'
 import QuickSearchSurface from './components/QuickSearchSurface'
+import VimNavIndicator from './components/VimNavIndicator'
 import ReportProblemModal from './components/ReportProblemModal'
 import FeedbackPill from './components/FeedbackPill'
 import KiroAccountModal, { type KiroAccountUsage } from './components/KiroAccountModal'
@@ -2178,6 +2180,9 @@ export default function App() {
   // Search Everywhere command palette — global double-Shift / ⌘K
   // trigger + open state. Mounted once below at the app shell.
   const commandPalette = useCommandPalette()
+  // Vim-style navigation loop (opt-in; Settings → Shortcuts). Mounted at the
+  // App root like its sibling shortcut hooks so one listener covers every page.
+  const { vimNavEnabled } = useVimNav({ openQuickSearch: commandPalette.openPalette })
   const newChatMutation = useMutation({
     mutationFn: () => dispatch(createSlot(undefined)).unwrap(),
     onSuccess: () => {
@@ -4419,6 +4424,7 @@ export default function App() {
       onClose={commandPalette.close}
       openShortcuts={toggleShortcutsModal}
     />
+    <VimNavIndicator enabled={vimNavEnabled} />
     {/* Theme decoration: always-mounted decorative overlays (widgets,
         transitions) contributed by the active theme's branding. Absent unless
         a registered theme declares them. Each overlay is isolated in its own

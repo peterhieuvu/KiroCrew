@@ -5453,6 +5453,9 @@
       "confirm_discard": "Discard drawing",
       "already_attached": "Attached — edit the canvas to sketch again",
       "load_failed": "Couldn't load the sketch pad — check your connection and reopen"
+    },
+    "vimNavIndicator": {
+      "normal_mode": "NAV"
     }
   },
   "hooks": {
@@ -8266,7 +8269,16 @@
         "enable_shortcuts": "Enable shortcuts",
         "preferences": "Preferences",
         "search": "Search",
-        "use_ctrl_not_option_for_chat_1_9": "Use ⌃ Ctrl (not ⌥ Option) for chat 1–9"
+        "use_ctrl_not_option_for_chat_1_9": "Use ⌃ Ctrl (not ⌥ Option) for chat 1–9",
+        "vim_navigation": "Vim navigation",
+        "enable_vim_navigation": "Enable vim navigation",
+        "vim_navigation_description": "Modeless vim-style keys: Esc or Ctrl+[ leaves the message box, J/K switch sessions, I returns to typing, / opens search",
+        "vim_binding_or": "or",
+        "vim_exit_insert": "Leave the message box",
+        "vim_focus_composer": "Focus the message box",
+        "vim_next_session": "Next session",
+        "vim_prev_session": "Previous session",
+        "vim_open_search": "Open search"
       },
       "skillsPanel": {
         "analyze_each_completed_session_and_draft_a_reusa": "Analyze each completed session and draft a reusable SKILL.md when the session demonstrates a recurring procedure — one a future session, working on a different target, would run again. Off by default. Drafts are staged to the pending queue on the Skills tab for review — nothing goes live without your approval (see below).",
