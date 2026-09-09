@@ -1,7 +1,7 @@
 /**
- * RichMarkdownEditor — Tiptap-backed WYSIWYG markdown surface for Scribe.
+ * RichMarkdownEditor — Tiptap-backed WYSIWYG markdown surface for Inkwell.
  *
- * Contract with ScribePage: `value` is the document's markdown; `onChange`
+ * Contract with InkwellPage: `value` is the document's markdown; `onChange`
  * receives serialized markdown on every user edit. External changes (open a
  * different doc, adopt the co-author's write on busy→idle, explicit reload)
  * arrive as a `value` the editor did not emit, and are applied with
@@ -10,7 +10,7 @@
  *
  * The distinction between "external value" and "our own echo" is the
  * `lastEmittedRef` check — the same shape PapyrusEditor uses for its seed
- * logic. Without it, ScribePage echoing `buffer` back down would reset the
+ * logic. Without it, InkwellPage echoing `buffer` back down would reset the
  * caret on every keystroke.
  *
  * Round-trip note: markdown → ProseMirror → markdown normalizes formatting
@@ -19,7 +19,7 @@
  * identical; the save path treats that as an ordinary edit, which is correct.
  *
  * PROTOTYPE NOTE: user-facing strings are plain English pending i18n catalog
- * entries — a PR blocker, not a prototype blocker (same status as ScribePage).
+ * entries — a PR blocker, not a prototype blocker (same status as InkwellPage).
  */
 import { useEffect, useImperativeHandle, useReducer, useRef, useState, forwardRef } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
@@ -184,7 +184,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
 
   const setLink = () => {
     const prev = editor.getAttributes('link').href as string | undefined
-    // Prototype idiom (matches ScribePage's createDoc): prompt over popover.
+    // Prototype idiom (matches InkwellPage's createDoc): prompt over popover.
     const url = window.prompt('Link URL (empty to remove):', prev || '')
     if (url === null) return
     const chain = editor.chain().focus().extendMarkRange('link')
@@ -195,7 +195,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   const btnCls = (active: boolean) => (active ? 'text-accent bg-bg-hover' : 'text-muted hover:text-text')
 
   return (
-    <div ref={wrapRef} className="scribe-rich relative flex h-full min-h-0 flex-col" data-testid="scribe-editor">
+    <div ref={wrapRef} className="inkwell-rich relative flex h-full min-h-0 flex-col" data-testid="inkwell-editor">
       <div className="flex items-center gap-0.5 border-b border-border px-2 py-1 shrink-0 flex-wrap" role="toolbar" aria-label="Formatting">
         <IconButton aria-label="Undo" title="Undo" disabled={disabled || !editor.can().undo()} onClick={() => editor.chain().focus().undo().run()} className="text-muted hover:text-text"><Undo2 size={15} /></IconButton>
         <IconButton aria-label="Redo" title="Redo" disabled={disabled || !editor.can().redo()} onClick={() => editor.chain().focus().redo().run()} className="text-muted hover:text-text"><Redo2 size={15} /></IconButton>
@@ -232,7 +232,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
       {commentSel && (
         <button
           type="button"
-          data-testid="scribe-comment-pill"
+          data-testid="inkwell-comment-pill"
           className="absolute z-10 inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text shadow-md hover:bg-bg-hover cursor-pointer transition-colors"
           style={{ left: commentSel.x, top: commentSel.y }}
           // onMouseDown, not onClick: a click would first blur the editor,

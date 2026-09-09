@@ -1,7 +1,7 @@
-"""Scribe — markdown documents with an embedded agent co-author.
+"""Inkwell — markdown documents with an embedded agent co-author.
 
 A thin UI over core capabilities, per ``workspace/markdown-coauthor-rfc.md``:
-documents are markdown-kind artifacts tagged ``scribe`` (storage, versions,
+documents are markdown-kind artifacts tagged ``inkwell`` (storage, versions,
 anchored comments, and the doc↔session binding are all core artifact
 features), and the co-author is a stock chat slot bound to the artifact.
 

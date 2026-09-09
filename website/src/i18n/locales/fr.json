@@ -4551,7 +4551,7 @@
         "configuration_1": "Ouvre Task Runner, choisis Compose, From Spec ou From YAML, sélectionne un agent et éventuellement un espace de travail absolu, puis vérifie avec Plan ou démarre immédiatement avec Run."
       }
     },
-    "scribe": {
+    "inkwell": {
       "manifest": {
         "display_name": "Scribe",
         "page_label": "Scribe",

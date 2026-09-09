@@ -1,7 +1,7 @@
 /**
- * Scribe anchor resolution + markdown round-trip idempotency.
+ * Inkwell anchor resolution + markdown round-trip idempotency.
  *
- * Both suites run against a REAL headless Tiptap editor with Scribe's own
+ * Both suites run against a REAL headless Tiptap editor with Inkwell's own
  * extension set, so the corpus below is simultaneously:
  *  - the anchor-resolution fixture (quotes located in real PM docs), and
  *  - the serializer-idempotency check the RFC's Risks section calls for:
@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
-import { buildTextIndex, normalizeQuote, resolveAnchor, resolveThreads, snapToWordBounds } from '../apps/scribe/anchors'
+import { buildTextIndex, normalizeQuote, resolveAnchor, resolveThreads, snapToWordBounds } from '../apps/inkwell/anchors'
 
 function makeEditor(markdown: string): Editor {
   return new Editor({

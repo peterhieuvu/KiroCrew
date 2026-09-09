@@ -103,7 +103,7 @@ agent loads only the one it needs.
 | Spec | Subsystem |
 |---|---|
 | [papyrus.md](papyrus.md) | The Papyrus writing app. |
-| [scribe.md](scribe.md) | Markdown co-authoring on the artifact store: rich editor, autosave, anchored comment threads, bound co-author session. |
+| [inkwell.md](inkwell.md) | Markdown co-authoring on the artifact store: rich editor, autosave, anchored comment threads, bound co-author session. |
 | [aws-control.md](aws-control.md) | The AWS account portal and S3-backed cloud drive app: accounts, Drive/Library/Backup, consent and confirmation guards, sharing. |
 | [command-bar.md](command-bar.md) | The opt-in launcher that replaces quick-search: the overlay seam, the request-free root, ranking and scopes. |
 | [pptx-maker.md](pptx-maker.md) | Deck generation. |

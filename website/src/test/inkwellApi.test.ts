@@ -1,10 +1,10 @@
 /**
- * Scribe save layer — the one call that bypasses the shared api client
+ * Inkwell save layer — the one call that bypasses the shared api client
  * because it needs precise 409 handling for the optimistic-concurrency
  * token (#7818), capability-detected on pre-token gateways.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { saveDoc, StaleDocError } from '../apps/scribe/api'
+import { saveDoc, StaleDocError } from '../apps/inkwell/api'
 
 function mockFetchOnce(status: number, body: unknown) {
   const res = {

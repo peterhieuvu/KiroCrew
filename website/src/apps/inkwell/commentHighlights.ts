@@ -1,5 +1,5 @@
 /**
- * Comment-highlight decorations for the Scribe editor.
+ * Comment-highlight decorations for the Inkwell editor.
  *
  * A ProseMirror plugin holding a DecorationSet:
  *  - REBUILT when the host pushes a new resolved-highlight list via
@@ -30,7 +30,7 @@ function buildDecorations(highlights: ThreadHighlight[], docSize: number): Decor
     .filter(h => h.from >= 0 && h.to > h.from && h.to <= docSize)
     .map(h =>
       Decoration.inline(h.from, h.to, {
-        class: `scribe-comment-hl scribe-comment-hl--${h.status}`,
+        class: `inkwell-comment-hl inkwell-comment-hl--${h.status}`,
         'data-thread-id': h.id,
       }),
     )

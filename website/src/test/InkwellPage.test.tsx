@@ -1,5 +1,5 @@
 /**
- * ScribePage flow tests — the store-rework behaviors, at the logic seams.
+ * InkwellPage flow tests — the store-rework behaviors, at the logic seams.
  *
  * The heavy children are mocked (RichMarkdownEditor exposes its callbacks as
  * buttons; CoAuthorPanel is a stub): the editor engine has its own suite
@@ -11,8 +11,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { renderWithProviders } from './helpers'
-import ScribePage from '../apps/scribe/ScribePage'
-import { StaleDocError } from '../apps/scribe/api'
+import InkwellPage from '../apps/inkwell/InkwellPage'
+import { StaleDocError } from '../apps/inkwell/api'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ const { saveDocMock, apiMock } = vi.hoisted(() => ({
   },
 }))
 
-vi.mock('../apps/scribe/api', async (orig) => {
+vi.mock('../apps/inkwell/api', async (orig) => {
   const real = await orig() as object
   return {
     ...real,
@@ -44,7 +44,7 @@ vi.mock('../api/client', () => ({ api: apiMock }))
 // Editor stub: surfaces onChange / onComment / threads as pokeable controls,
 // and (phase 3) an imperative applySuggestion recorded on the mock.
 const applySuggestionMock = vi.hoisted(() => vi.fn().mockReturnValue(true))
-vi.mock('../apps/scribe/RichMarkdownEditor', async () => {
+vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
   const React = await import('react')
   return {
     default: React.forwardRef(function Stub({ onChange, onComment, commentThreads, onThreadsResolved }: {
@@ -65,13 +65,13 @@ vi.mock('../apps/scribe/RichMarkdownEditor', async () => {
     }),
   }
 })
-vi.mock('../apps/scribe/CoAuthorPanel', () => ({
+vi.mock('../apps/inkwell/CoAuthorPanel', () => ({
   default: () => <div data-testid="coauthor-stub" />,
 }))
 
 const DOC = {
   slug: 'notes', name: 'notes', kind: 'markdown', content: '# doc\n',
-  content_sha256: 'sha-0', version: 1, tags: ['scribe'],
+  content_sha256: 'sha-0', version: 1, tags: ['inkwell'],
 }
 
 beforeEach(() => {
@@ -94,7 +94,7 @@ afterEach(() => {
 })
 
 async function openDoc() {
-  renderWithProviders(<ScribePage />)
+  renderWithProviders(<InkwellPage />)
   await act(async () => { await vi.runOnlyPendingTimersAsync() })
   fireEvent.click(await screen.findByRole('button', { name: 'notes' }))
   await act(async () => { await vi.runOnlyPendingTimersAsync() })
@@ -239,7 +239,7 @@ describe('proposed edits (phase 3)', () => {
 describe('comment composer', () => {
   it('send posts an anchored comment, then a nudge turn, then refetches', async () => {
     apiMock.postArtifactComment.mockResolvedValue({})
-    apiMock.createChatSlot.mockResolvedValue({ key: 'chat-9', title: 'Scribe: notes' })
+    apiMock.createChatSlot.mockResolvedValue({ key: 'chat-9', title: 'Inkwell: notes' })
     apiMock.chatSlotContext.mockResolvedValue({})
     apiMock.sendChat.mockResolvedValue({ ok: true })
     await openDoc()

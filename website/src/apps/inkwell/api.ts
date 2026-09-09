@@ -1,8 +1,8 @@
-// Scribe's thin layer over the core artifact API.
+// Inkwell's thin layer over the core artifact API.
 //
 // The store rework (design doc: "Content management: the artifact store")
-// deleted Scribe's own backend: documents are markdown-kind artifacts tagged
-// `scribe`, read and listed through the main `api` client. The one call kept
+// deleted Inkwell's own backend: documents are markdown-kind artifacts tagged
+// `inkwell`, read and listed through the main `api` client. The one call kept
 // here is the save, because it needs precise 409 handling for the
 // optimistic-concurrency token (#7818) that the generic client helpers
 // flatten into a generic Error.
@@ -15,8 +15,8 @@
 
 import type { Artifact } from '../../types'
 
-/** The tag that marks an artifact as a Scribe document. */
-export const SCRIBE_TAG = 'scribe'
+/** The tag that marks an artifact as a Inkwell document. */
+export const INKWELL_TAG = 'inkwell'
 
 /** Thrown when a guarded save is refused (409): live content no longer
  *  hashes to the token we read. Carries the server's current hash so the
@@ -38,7 +38,7 @@ export interface SaveResult {
 }
 
 /** Artifact detail plus the concurrency token (absent pre-#7818). */
-export type ScribeDoc = Artifact & { content_sha256?: string | null }
+export type InkwellDoc = Artifact & { content_sha256?: string | null }
 
 /** Save document content.
  *

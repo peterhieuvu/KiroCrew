@@ -1,12 +1,12 @@
 /**
- * ScribePage — markdown documents with an embedded agent co-author.
+ * InkwellPage — markdown documents with an embedded agent co-author.
  *
  * Store rework (design doc: "Content management: the artifact store"):
- * documents are markdown-kind ARTIFACTS tagged `scribe`. The app owns only
+ * documents are markdown-kind ARTIFACTS tagged `inkwell`. The app owns only
  * UI — storage, versions, anchored comments, and the doc↔session binding are
  * core artifact capabilities this page calls.
  *
- *   - Docs list  = GET /api/artifacts?tag=scribe (main api client)
+ *   - Docs list  = GET /api/artifacts?tag=inkwell (main api client)
  *   - Autosave   = debounced PATCH `snapshot: false` (live state, no version
  *                  churn; md-notebook's flushSave discipline: unmount-flush,
  *                  dirty-stays-on-failure)
@@ -33,7 +33,7 @@ import { api } from '../../api/client'
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from './RichMarkdownEditor'
 import CoAuthorPanel from './CoAuthorPanel'
 import { companionContextLines } from './companionPrompt'
-import { saveDoc, StaleDocError, SCRIBE_TAG, type ScribeDoc } from './api'
+import { saveDoc, StaleDocError, INKWELL_TAG, type InkwellDoc } from './api'
 import type { CommentThread } from './anchors'
 import { parseSuggestion } from './suggestions'
 
@@ -49,11 +49,11 @@ function pickBoundSlot(slots: ChatSlot[] | undefined, slug: string): ChatSlot | 
     (b.last_activity_ts || '').localeCompare(a.last_activity_ts || ''))[0]
 }
 
-export default function ScribePage() {
+export default function InkwellPage() {
   const dispatch = useAppDispatch()
 
   const [docs, setDocs] = useState<Artifact[]>([])
-  const [doc, setDoc] = useState<ScribeDoc | null>(null)
+  const [doc, setDoc] = useState<InkwellDoc | null>(null)
   const [buffer, setBuffer] = useState('')
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -95,7 +95,7 @@ export default function ScribePage() {
 
   const refreshDocs = useCallback(async () => {
     try {
-      const res = (await api.artifacts({ tag: SCRIBE_TAG })) as { artifacts: Artifact[] }
+      const res = (await api.artifacts({ tag: INKWELL_TAG })) as { artifacts: Artifact[] }
       setDocs(res.artifacts)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -106,7 +106,7 @@ export default function ScribePage() {
 
   const openDoc = useCallback(async (slug: string) => {
     try {
-      const d = (await api.artifact(slug)) as ScribeDoc
+      const d = (await api.artifact(slug)) as InkwellDoc
       setDoc(d)
       setBuffer(d.content ?? '')
       baseShaRef.current = d.content_sha256 ?? null
@@ -133,7 +133,7 @@ export default function ScribePage() {
         name,
         kind: 'markdown',
         content: `# ${name}\n`,
-        tags: [SCRIBE_TAG],
+        tags: [INKWELL_TAG],
         ...(sourcePath ? { source_path: sourcePath } : {}),
       })) as { slug: string }
       await refreshDocs()
@@ -198,7 +198,7 @@ export default function ScribePage() {
   // save — but ONLY when there is unsaved work. Unconditional flushing made
   // every doc OPEN fire a save of just-loaded content (the effect re-runs on
   // the null→slug transition and its cleanup ran flushSave) — caught by
-  // ScribePage.test.tsx's "not called yet" assertion.
+  // InkwellPage.test.tsx's "not called yet" assertion.
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -236,7 +236,7 @@ export default function ScribePage() {
       // slots event, so `pickBoundSlot` reattaches from any browser.
       const created = await api.createChatSlot(
         undefined, undefined, undefined, undefined, undefined,
-        `Scribe: ${doc.name}`, undefined, doc.slug,
+        `Inkwell: ${doc.name}`, undefined, doc.slug,
       )
       const key = created.key as string
       dispatch(addSlotOptimistic({
@@ -249,7 +249,7 @@ export default function ScribePage() {
       api.chatSlotContext(
         key,
         companionContextLines(doc.name, doc.slug, doc.source_path ?? null).join('\n'),
-        { source: 'scribe-co-author', ephemeral: true },
+        { source: 'inkwell-co-author', ephemeral: true },
       ).catch(() => undefined)
       dispatch(fetchSlots())
       return key
@@ -272,7 +272,7 @@ export default function ScribePage() {
     if (!wasBusy || coAuthorBusy || !slotKey || !doc) return
     void (async () => {
       try {
-        const fresh = (await api.artifact(doc.slug)) as ScribeDoc
+        const fresh = (await api.artifact(doc.slug)) as InkwellDoc
         if (dirtyRef.current) {
           if ((fresh.content ?? '') === bufferRef.current) {
             // Buffer already matches the server (agent made no change, or the
@@ -422,12 +422,12 @@ export default function ScribePage() {
   }, [doc, fetchThreads])
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden" data-testid="scribe-page">
+    <div className="flex h-full min-h-0 overflow-hidden" data-testid="inkwell-page">
       {/* Document list */}
       <aside className="w-52 shrink-0 border-r border-border bg-card flex flex-col min-h-0">
         <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border shrink-0">
           <PenLine className="lucide-inline text-accent" />
-          <span className="flex-1 text-[13px] font-semibold text-text">Scribe</span>
+          <span className="flex-1 text-[13px] font-semibold text-text">Inkwell</span>
           <button
             type="button"
             onClick={createDoc}
@@ -518,7 +518,7 @@ export default function ScribePage() {
           )}
         </div>
         {rootThreads.length > 0 && (
-          <div className="border-t border-border shrink-0 max-h-36 overflow-y-auto" data-testid="scribe-threads">
+          <div className="border-t border-border shrink-0 max-h-36 overflow-y-auto" data-testid="inkwell-threads">
             {rootThreads.map(t => (
               <div
                 key={t.id}
@@ -578,7 +578,7 @@ export default function ScribePage() {
           </div>
         )}
         {commentQuote && (
-          <div className="border-t border-border px-3 py-2 shrink-0 flex flex-col gap-1.5" data-testid="scribe-comment-composer">
+          <div className="border-t border-border px-3 py-2 shrink-0 flex flex-col gap-1.5" data-testid="inkwell-comment-composer">
             <div className="text-[12px] text-muted truncate">
               “{commentQuote.length > 140 ? `${commentQuote.slice(0, 140)}…` : commentQuote}”
             </div>

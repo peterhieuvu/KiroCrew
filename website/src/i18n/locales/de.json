@@ -4475,7 +4475,7 @@
         "configuration_1": "Öffne Task Runner, wähle Compose, From Spec oder From YAML, einen Agenten und optional einen absoluten Arbeitsbereich und prüfe dann mit Plan oder starte sofort mit Run."
       }
     },
-    "scribe": {
+    "inkwell": {
       "manifest": {
         "display_name": "Scribe",
         "page_label": "Scribe",

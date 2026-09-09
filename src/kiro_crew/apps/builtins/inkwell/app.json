@@ -1,7 +1,7 @@
 {
-  "name": "scribe",
+  "name": "inkwell",
   "version": "0.1.0",
-  "displayName": "Scribe",
+  "displayName": "Inkwell",
   "description": "Write markdown documents beside an agent co-author. The co-author panel is a real Kiro Crew chat session scoped to the document, so the agent brings your memory, knowledge library, and codebase context to the draft — and can edit the document while you watch it update.",
   "author": "pevu",
   "license": "Apache-2.0",
@@ -31,8 +31,8 @@
   "ui": {
     "pages": [
       {
-        "route": "/scribe",
-        "label": "Scribe",
+        "route": "/inkwell",
+        "label": "Inkwell",
         "icon": "PenLine"
       }
     ]
@@ -44,9 +44,9 @@
       "windows"
     ]
   },
-  "iconUrl": "/app-assets/scribe/icon.svg",
+  "iconUrl": "/app-assets/inkwell/icon.svg",
   "screenshots": [
-    "/app-assets/scribe/screenshot-main.png"
+    "/app-assets/inkwell/screenshot-main.png"
   ],
   "useCases": [
     "Draft a design doc or notes in markdown while a document-scoped agent supplies implementation details from your codebase and research from your memory."

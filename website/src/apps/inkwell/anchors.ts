@@ -19,7 +19,7 @@
  *
  * Text model: the searchable string is the concatenation of the doc's text
  * nodes with ONE space at each block boundary and all whitespace runs
- * collapsed — matching how ScribePage builds quotes on creation
+ * collapsed — matching how InkwellPage builds quotes on creation
  * (`textBetween(from, to, ' ')` + collapse). The index keeps a map from
  * searchable-string offsets back to PM positions.
  *

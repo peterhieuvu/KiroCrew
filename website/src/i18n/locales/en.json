@@ -3369,11 +3369,11 @@
         "configuration_1": "Open Task Runner, choose Compose, From Spec, or From YAML, select an agent and optional absolute workspace, then review with Plan or start immediately with Run."
       }
     },
-    "scribe": {
+    "inkwell": {
       "manifest": {
-        "display_name": "Scribe",
+        "display_name": "Inkwell",
         "description": "Write markdown documents beside an agent co-author. The co-author panel is a real Kiro Crew chat session scoped to the document, so the agent brings your memory, knowledge library, and codebase context to the draft — and can edit the document while you watch it update.",
-        "page_label": "Scribe",
+        "page_label": "Inkwell",
         "highlight_1": "Rich markdown editor with autosave — versions snapshot on demand",
         "highlight_2": "AI co-author chat scoped to the document — a full Kiro Crew session with your memory and tools",
         "highlight_3": "Highlight a passage to anchor a comment; the co-author addresses it and marks it for your review",

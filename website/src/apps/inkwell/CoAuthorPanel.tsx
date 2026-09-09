@@ -1,14 +1,14 @@
 /**
- * CoAuthorPanel — the embedded co-author chat for a Scribe document.
+ * CoAuthorPanel — the embedded co-author chat for a Inkwell document.
  *
  * Mounts the FULL native ChatPage (`switchSlot()` + `<ChatPage embedded />`),
  * the same approach papyrus's CoAuthorPanel and ArtifactChatPanel take, so the
  * co-author experience is identical to the normal chat page. `embedMode="chat"`
  * selects single-session chrome (no sessions sidebar) and `noUrlSync` keeps
- * ChatPage's deep-link handling off the host route, which ScribePage owns.
+ * ChatPage's deep-link handling off the host route, which InkwellPage owns.
  *
  * Session lifecycle (find-or-create, remember which slot belongs to which
- * document) lives in ScribePage; this component activates whatever slot it is
+ * document) lives in InkwellPage; this component activates whatever slot it is
  * handed.
  *
  * PROTOTYPE NOTE: user-facing strings are plain English pending i18n catalog
@@ -51,7 +51,7 @@ export default function CoAuthorPanel({
     <aside
       className="flex flex-col h-full min-h-0 border-l border-border bg-card overflow-hidden"
       aria-label="Co-author chat"
-      data-testid="scribe-co-author"
+      data-testid="inkwell-co-author"
     >
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border shrink-0">
         <Sparkles className="lucide-inline text-accent shrink-0" />

@@ -1,10 +1,10 @@
-# Scribe Module
+# Inkwell Module
 
 ## Overview
 
-Scribe is an opt-in (`defaultEnabled: false`) built-in app: a rich markdown
+Inkwell is an opt-in (`defaultEnabled: false`) built-in app: a rich markdown
 editor with an embedded AI co-author. Documents are **markdown-kind artifacts
-tagged `scribe`** — the app owns only UI, while storage, versions, anchored
+tagged `inkwell`** — the app owns only UI, while storage, versions, anchored
 comments, and the document↔session binding are core artifact capabilities it
 calls. A document can be file-backed (`source_path`), in which case the store
 writes through to the real `.md` file on disk, keeping it portable, diffable,
@@ -18,14 +18,14 @@ user's unsaved typing.
 
 ## No backend
 
-This app registers **no routes**: `apps/builtins/scribe/__init__.py`
+This app registers **no routes**: `apps/builtins/inkwell/__init__.py`
 deliberately exports no `register_routes` (the startup loop in
 `dashboard/server.py` checks `hasattr` and skips it). Everything the page
 calls is a core endpoint:
 
 | Concern | Core surface |
 |---|---|
-| List / read / create documents | `GET /api/artifacts?tag=scribe`, `GET /api/artifacts/{slug}`, `POST /api/artifacts` (handlers in `src/kiro_crew/dashboard/handlers/artifacts.py`) |
+| List / read / create documents | `GET /api/artifacts?tag=inkwell`, `GET /api/artifacts/{slug}`, `POST /api/artifacts` (handlers in `src/kiro_crew/dashboard/handlers/artifacts.py`) |
 | Save | `PATCH /api/artifacts/{slug}` — `snapshot: false` for autosave (live state, no version bump), `snapshot: true` for an explicit checkpoint |
 | Concurrency | `expected_sha256` optimistic-concurrency token when the gateway supplies `content_sha256`; capability-detected, last-write-wins otherwise |
 | Comments | `GET/POST /api/artifacts/{slug}/comments`, `/{id}/resolve` (resolve is human-only, enforced server-side) |
@@ -33,9 +33,9 @@ calls is a core endpoint:
 
 ## Frontend
 
-All under `website/src/apps/scribe/`:
+All under `website/src/apps/inkwell/`:
 
-- `ScribePage.tsx` — three panes (doc list, editor, co-author). Owns the
+- `InkwellPage.tsx` — three panes (doc list, editor, co-author). Owns the
   autosave loop (debounced `saveDoc`, md-notebook's flush discipline:
   unmount-flush only when dirty, dirty-stays-on-failure), the conflict banner
   (a stale-token 409 keeps the stale token so retries fail loudly), the
@@ -70,7 +70,7 @@ All under `website/src/apps/scribe/`:
 The co-author slot carries a first-class `artifact` field set at creation
 (`createChatSlot` in `website/src/api/client.ts`); the page resolves the
 bound session by filtering the live Redux slot list (`pickBoundSlot` in
-`ScribePage.tsx`, the same rule as `ArtifactDetailPage.tsx`). There is no
+`InkwellPage.tsx`, the same rule as `ArtifactDetailPage.tsx`). There is no
 mapping store: the binding survives browser profiles, and a deleted session
 degrades to "Start a session" because it is simply absent from the list.
 
@@ -90,9 +90,9 @@ still resolvable in the editor. The strip shows the union of both verdicts.
 
 ## Tests
 
-- `website/src/test/scribeAnchors.test.ts` — anchor resolution and the
+- `website/src/test/inkwellAnchors.test.ts` — anchor resolution and the
   markdown round-trip idempotency corpus, against a real headless Tiptap
   editor with the app's extension set.
-- `website/src/test/ScribePage.test.tsx` — autosave debounce, failure and
+- `website/src/test/InkwellPage.test.tsx` — autosave debounce, failure and
   conflict paths, threads strip, resolve wiring, comment-composer flow.
-- `website/src/test/scribeApi.test.ts` — `saveDoc` token/409 contract.
+- `website/src/test/inkwellApi.test.ts` — `saveDoc` token/409 contract.

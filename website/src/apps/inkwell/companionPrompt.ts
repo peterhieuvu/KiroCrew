@@ -1,5 +1,5 @@
 /**
- * Prompt text for the Scribe co-author agent.
+ * Prompt text for the Inkwell co-author agent.
  *
  * Model-facing, not user-facing: deliberately NOT routed through i18n (the
  * papyrus convention — translating identifiers degrades instruction-following
