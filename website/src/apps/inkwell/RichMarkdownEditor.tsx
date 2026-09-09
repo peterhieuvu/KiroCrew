@@ -54,6 +54,11 @@ interface Props {
   onThreadsResolved?: (orphanedIds: string[]) => void
   /** A decorated range was clicked. */
   onThreadClick?: (threadId: string) => void
+  /** Caret context for the context rail: the 0-based markdown source line
+   *  nearest the caret (approximated by block index — headings map 1:1 to
+   *  their source lines in a blank-line-separated doc) and the current
+   *  selection text, or null. Fires on selection changes only. */
+  onCaretContext?: (ctx: { blockIndex: number; selection: string | null }) => void
   disabled?: boolean
 }
 
@@ -70,7 +75,7 @@ const MIN_QUOTE_LEN = 3
 const MAX_QUOTE_LEN = 500
 
 const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function RichMarkdownEditor({
-  value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick, disabled,
+  value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick, onCaretContext, disabled,
 }, ref) {
   // Keep the latest onChange without making it an editor dependency — the
   // editor instance must survive parent re-renders or the caret dies.
@@ -112,6 +117,26 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
     if (!editor) return
     editor.on('transaction', forceRender)
     return () => { editor.off('transaction', forceRender) }
+  }, [editor])
+
+  // Caret context for the rail: block index of the caret's top-level node
+  // plus the selection text. Only on selectionUpdate — content-only
+  // transactions don't move the subject.
+  const onCaretContextRef = useRef(onCaretContext)
+  onCaretContextRef.current = onCaretContext
+  useEffect(() => {
+    if (!editor) return
+    const handler = () => {
+      const fn = onCaretContextRef.current
+      if (!fn) return
+      const { from, to } = editor.state.selection
+      const $from = editor.state.doc.resolve(from)
+      const blockIndex = $from.index(0)
+      const selection = from === to ? null : editor.state.doc.textBetween(from, to, ' ')
+      fn({ blockIndex, selection })
+    }
+    editor.on('selectionUpdate', handler)
+    return () => { editor.off('selectionUpdate', handler) }
   }, [editor])
 
   // Apply external value changes without emitting an update (no dirty flag,

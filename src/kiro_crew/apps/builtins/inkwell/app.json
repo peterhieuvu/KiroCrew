@@ -24,7 +24,9 @@
       "/api/chat/*",
       "/api/artifacts",
       "/api/artifacts/*",
-      "/api/artifact-folders"
+      "/api/artifact-folders",
+      "/api/knowledge/search-for-context",
+      "/api/memory/semantic"
     ],
     "storage": true
   },

@@ -30,6 +30,7 @@ calls is a core endpoint:
 | Concurrency | `expected_sha256` optimistic-concurrency token when the gateway supplies `content_sha256`; capability-detected, last-write-wins otherwise |
 | Comments | `GET/POST /api/artifacts/{slug}/comments`, `/{id}/resolve` (resolve is human-only, enforced server-side) |
 | Co-author session | `POST /api/chat/slots` with the `artifact` binding; ephemeral scoping note via `POST /api/chat/slots/{key}/context` |
+| Context rail | `GET /api/knowledge/search-for-context?q=`, `GET /api/memory/semantic` — synchronous reads, no agent turn |
 
 ## Frontend
 
@@ -59,6 +60,15 @@ All under `website/src/apps/inkwell/`:
   replacement as an ordinary edit (single-line = plain text, multi-line =
   markdown blocks), then replies and resolves; Reject replies and resolves.
   Accept/reject sit on the human-only resolve path by construction.
+- `ContextRail.tsx` — the synchronous context rail (phase 5): "what did we
+  decide about X" answered with no agent turn. Derives a query from the
+  document (selection, else H1 + the heading nearest the caret), then reads
+  `GET /api/knowledge/search-for-context` for citation cards and
+  `GET /api/memory/semantic` (fetched once per mount, filtered client-side
+  by query terms — the same approach as the dashboard's own memory card;
+  there is no server-side memory search). Debounced; stale responses
+  dropped by request id. The co-author pane answers "help me write this";
+  the rail answers "what do we already know" — two interactions, one surface.
 - `api.ts` — one raw call, `saveDoc`, kept off the shared client for precise
   409 handling; everything else uses `website/src/api/client.ts`.
 - `companionPrompt.ts` — the ephemeral scoping note: names the artifact slug,

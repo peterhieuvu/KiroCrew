@@ -24,7 +24,7 @@
  * entries — a PR blocker, not a prototype blocker.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Camera, FilePlus2, MessageSquareText, PenLine } from 'lucide-react'
+import { BookOpen, Camera, FilePlus2, MessageSquareText, PenLine } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store'
 import { addSlotOptimistic, fetchSlots } from '../../store/dashboardSlice'
 import { selectComposerBusy } from '../../store/chatSlice'
@@ -37,6 +37,23 @@ import { saveDoc, StaleDocError, INKWELL_TAG, type InkwellDoc } from './api'
 import type { CommentThread } from './anchors'
 import { parseSuggestion } from './suggestions'
 import { threeWayMerge } from './merge'
+import ContextRail from './ContextRail'
+
+/** Map a top-level block index to its markdown source line. Blocks in the
+ *  app's own serialization are separated by blank lines, so the Nth block
+ *  starts at the Nth non-empty run — good enough to pick the nearest
+ *  heading for the context rail's query. */
+export function blockIndexToLine(markdown: string, blockIndex: number): number {
+  const lines = markdown.split('\n')
+  let block = -1
+  let inBlock = false
+  for (let i = 0; i < lines.length; i++) {
+    const nonEmpty = lines[i].trim().length > 0
+    if (nonEmpty && !inBlock) { block += 1; inBlock = true; if (block === blockIndex) return i }
+    if (!nonEmpty) inBlock = false
+  }
+  return Math.max(0, lines.length - 1)
+}
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -65,6 +82,10 @@ export default function InkwellPage() {
   const [merged, setMerged] = useState(false)
   const [chatOpen, setChatOpen] = useState(true)
   const [slotCreating, setSlotCreating] = useState(false)
+
+  // ── Context rail (phase 5) ────────────────────────────────────────────────
+  const [railOpen, setRailOpen] = useState(false)
+  const [caretCtx, setCaretCtx] = useState<{ blockIndex: number; selection: string | null }>({ blockIndex: 0, selection: null })
 
   // ── Comment threads ───────────────────────────────────────────────────────
   // Fetched with the doc, refetched when the co-author turn ends and after a
@@ -534,6 +555,15 @@ export default function InkwellPage() {
           </button>
           <button
             type="button"
+            onClick={() => setRailOpen(o => !o)}
+            disabled={!doc}
+            title={railOpen ? 'Hide context' : 'Show related knowledge and memory (no agent turn)'}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text hover:bg-bg-hover cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
+          >
+            <BookOpen className="lucide-inline" /> Context
+          </button>
+          <button
+            type="button"
             onClick={toggleChat}
             title={chatOpen ? 'Hide co-author' : 'Show co-author'}
             className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text hover:bg-bg-hover cursor-pointer transition-colors"
@@ -557,6 +587,7 @@ export default function InkwellPage() {
               commentThreads={rootThreads}
               onThreadsResolved={setOrphanedLocal}
               onThreadClick={setFocusThread}
+              onCaretContext={setCaretCtx}
             />
           ) : (
             <div className="h-full flex items-center justify-center text-[13px] text-muted">
@@ -663,6 +694,16 @@ export default function InkwellPage() {
           </div>
         )}
       </main>
+
+      {/* Context rail — synchronous, no agent turn */}
+      {railOpen && doc && (
+        <ContextRail
+          markdown={buffer}
+          caretLine={blockIndexToLine(buffer, caretCtx.blockIndex)}
+          selection={caretCtx.selection}
+          onClose={() => setRailOpen(false)}
+        />
+      )}
 
       {/* Co-author */}
       {chatOpen && doc && (
