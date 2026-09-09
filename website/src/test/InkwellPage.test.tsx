@@ -47,7 +47,8 @@ const applySuggestionMock = vi.hoisted(() => vi.fn().mockReturnValue(true))
 vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
   const React = await import('react')
   return {
-    default: React.forwardRef(function Stub({ onChange, onComment, commentThreads, onThreadsResolved }: {
+    default: React.forwardRef(function Stub({ value, onChange, onComment, commentThreads, onThreadsResolved }: {
+      value: string
       onChange: (md: string) => void
       onComment?: (q: string) => void
       commentThreads?: { id: string }[]
@@ -56,7 +57,8 @@ vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
       React.useImperativeHandle(ref, () => ({ applySuggestion: applySuggestionMock }))
       return (
         <div data-testid="editor-stub">
-          <button type="button" onClick={() => onChange('# doc\n\nedited')}>stub-type</button>
+          <span data-testid="editor-value">{value}</span>
+          <button type="button" onClick={() => onChange(value.replace('omega', 'omega user-edit'))}>stub-type</button>
           <button type="button" onClick={() => onComment?.('a quoted passage')}>stub-select</button>
           <button type="button" onClick={() => onThreadsResolved?.(['t2'])}>stub-orphan-t2</button>
           <span data-testid="thread-count">{commentThreads?.length ?? 0}</span>
@@ -70,7 +72,8 @@ vi.mock('../apps/inkwell/CoAuthorPanel', () => ({
 }))
 
 const DOC = {
-  slug: 'notes', name: 'notes', kind: 'markdown', content: '# doc\n',
+  slug: 'notes', name: 'notes', kind: 'markdown',
+  content: '# doc\n\nalpha line.\n\nomega line.\n',
   content_sha256: 'sha-0', version: 1, tags: ['inkwell'],
 }
 
@@ -110,7 +113,7 @@ describe('autosave', () => {
     expect(saveDocMock).toHaveBeenCalledTimes(1)
     const [slug, content, opts] = saveDocMock.mock.calls[0]
     expect(slug).toBe('notes')
-    expect(content).toContain('edited')
+    expect(content).toContain('user-edit')
     expect(opts).toMatchObject({ expectedSha256: 'sha-0', snapshot: false })
   })
 
@@ -125,9 +128,15 @@ describe('autosave', () => {
 })
 
 describe('conflict path', () => {
-  it('StaleDocError raises the banner and does not clear dirty', async () => {
+  // Post-phase-4, a bare 409 first attempts a 3-way merge; the loud banner
+  // is now the OVERLAP outcome, so these tests make the server side collide
+  // with the user's edit (same 'omega' line, different text).
+  const COLLIDING = { ...DOC, content: '# doc\n\nalpha line.\n\nomega agent-version.\n', content_sha256: 'sha-9' }
+
+  it('StaleDocError with overlapping edits raises the banner and does not clear dirty', async () => {
     saveDocMock.mockRejectedValueOnce(new StaleDocError('stale', 'sha-9'))
     await openDoc()
+    apiMock.artifact.mockResolvedValue(COLLIDING)
     fireEvent.click(screen.getByText('stub-type'))
     await act(async () => { await vi.advanceTimersByTimeAsync(900) })
     expect(screen.getByText(/Changed on the server/)).toBeInTheDocument()
@@ -137,9 +146,9 @@ describe('conflict path', () => {
   it('Reload adopts the server copy and clears the banner', async () => {
     saveDocMock.mockRejectedValueOnce(new StaleDocError('stale', 'sha-9'))
     await openDoc()
+    apiMock.artifact.mockResolvedValue(COLLIDING)
     fireEvent.click(screen.getByText('stub-type'))
     await act(async () => { await vi.advanceTimersByTimeAsync(900) })
-    apiMock.artifact.mockResolvedValue({ ...DOC, content: '# doc\n\nserver copy', content_sha256: 'sha-9' })
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
     await act(async () => { await vi.runOnlyPendingTimersAsync() })
     expect(screen.queryByText(/Changed on the server/)).not.toBeInTheDocument()
@@ -233,6 +242,40 @@ describe('proposed edits (phase 3)', () => {
     expect(applySuggestionMock).not.toHaveBeenCalled()
     expect(apiMockExt.replyArtifactComment).toHaveBeenCalledWith('notes', 'p1', { text: 'Declined the suggestion.' })
     expect(apiMock.resolveComment).toHaveBeenCalledWith('notes', 'p1')
+  })
+})
+
+describe('interleaved-edit merge (phase 4)', () => {
+  it('409 → clean 3-way merge adopts, banners, and re-saves the merged text', async () => {
+    // Disjoint regions: the user edits the 'omega' line (stub-type); the
+    // server's copy changed the 'alpha' line.
+    const THEIRS = { ...DOC, content: '# doc\n\nalpha line, agent improved.\n\nomega line.\n', content_sha256: 'sha-9' }
+    saveDocMock
+      .mockRejectedValueOnce(new StaleDocError('stale', 'sha-9'))
+      .mockResolvedValue({ contentSha256: 'sha-10' })
+    await openDoc()
+    apiMock.artifact.mockResolvedValue(THEIRS)
+    fireEvent.click(screen.getByText('stub-type'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(900) }) // first save → 409 → merge
+    expect(screen.getByText(/Merged the co-author/)).toBeInTheDocument()
+    const mergedValue = screen.getByTestId('editor-value').textContent ?? ''
+    expect(mergedValue).toContain('omega user-edit')
+    expect(mergedValue).toContain('alpha line, agent improved.')
+    await act(async () => { await vi.advanceTimersByTimeAsync(900) }) // armed retry persists
+    const last = saveDocMock.mock.calls.at(-1)
+    expect(last?.[1]).toContain('alpha line, agent improved.')
+    expect(last?.[1]).toContain('omega user-edit')
+    expect(last?.[2]).toMatchObject({ expectedSha256: 'sha-9' })
+  })
+
+  it('409 → overlapping edits keep the loud conflict banner, nothing dropped', async () => {
+    saveDocMock.mockRejectedValueOnce(new StaleDocError('stale', 'sha-9'))
+    await openDoc()
+    apiMock.artifact.mockResolvedValue({ ...DOC, content: '# doc\n\nalpha line.\n\nomega agent-version.\n', content_sha256: 'sha-9' })
+    fireEvent.click(screen.getByText('stub-type'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(900) })
+    expect(screen.getByText(/Changed on the server/)).toBeInTheDocument()
+    expect(screen.getByTestId('editor-value').textContent).toContain('omega user-edit') // buffer intact
   })
 })
 

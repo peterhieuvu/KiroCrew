@@ -77,10 +77,14 @@ degrades to "Start a session" because it is simply absent from the list.
 ## Conflict model
 
 Agent edits always create a version snapshot (store behavior); user autosaves
-never do. When the user typed during an agent turn, the busy→idle reload
-keeps the user's buffer AND the stale concurrency token, so the next save is
-refused loudly (409 banner with an explicit Reload) instead of silently
-overwriting the agent's edit.
+never do. Interleaved edits get a **three-way merge** (`merge.ts`, line-based
+on jsdiff, deliberately conservative): base is the content the buffer loaded
+from, so all three sides exist client-side. Disjoint edits merge silently —
+the result adopts into the still-dirty buffer and persists through the next
+autosave, with an info banner. Overlapping edits refuse: the buffer AND the
+stale concurrency token are kept, so the next save is refused loudly (409
+banner with an explicit Reload) instead of silently overwriting either side.
+Both the busy→idle reload and the save-time 409 route through the same merge.
 
 Known limit: the server's comment-anchor rescan
 (`_rescan_comment_anchors_locked` in `src/kiro_crew/artifacts.py`) checks

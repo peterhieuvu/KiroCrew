@@ -36,6 +36,7 @@ import { companionContextLines } from './companionPrompt'
 import { saveDoc, StaleDocError, INKWELL_TAG, type InkwellDoc } from './api'
 import type { CommentThread } from './anchors'
 import { parseSuggestion } from './suggestions'
+import { threeWayMerge } from './merge'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -59,6 +60,9 @@ export default function InkwellPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState(false)
+  // Phase-4 info signal: a clean 3-way merge folded the co-author's changes
+  // into the user's draft. Cleared on the next successful save or doc open.
+  const [merged, setMerged] = useState(false)
   const [chatOpen, setChatOpen] = useState(true)
   const [slotCreating, setSlotCreating] = useState(false)
 
@@ -113,6 +117,7 @@ export default function InkwellPage() {
       setDirty(false)
       setConflict(false)
       setError(null)
+      setMerged(false)
       setFocusThread(null)
       void fetchThreads(slug)
       // No session lookup: `slotKey` derives from the Redux slot list via the
@@ -170,11 +175,31 @@ export default function InkwellPage() {
       // keystroke mid-flight means there is newer unsaved content.
       if (bufferRef.current === content) setDirty(false)
       setConflict(false)
+      setMerged(false)
       return true
     } catch (e) {
       if (e instanceof StaleDocError) {
-        // Someone else (another window, the co-author via a path we didn't
-        // observe) changed the doc under us. Keep the stale token so every
+        // Interleaved edits caught at save time (phase 4): someone changed
+        // the doc under us. Fetch theirs and try the same 3-way merge as
+        // the busy→idle path; one retry, then the loud banner.
+        try {
+          const fresh = (await api.artifact(d.slug)) as InkwellDoc
+          const m = threeWayMerge(d.content ?? '', bufferRef.current, fresh.content ?? '')
+          if (m.clean) {
+            setDoc(fresh)
+            baseShaRef.current = fresh.content_sha256 ?? null
+            setBuffer(m.merged)
+            setDirty(true)
+            setConflict(false)
+            setMerged(true)
+            // Arm the autosave so the merged state persists without waiting
+            // for a keystroke (savingRef clears in finally before it fires).
+            if (debounceRef.current) clearTimeout(debounceRef.current)
+            debounceRef.current = setTimeout(() => { void flushSave(false) }, AUTOSAVE_DEBOUNCE_MS)
+            return false
+          }
+        } catch { /* fall through to the banner */ }
+        // Overlap (or the refetch failed): keep the stale token so every
         // retry keeps failing loudly until the user reloads or adopts.
         setConflict(true)
       } else {
@@ -282,11 +307,28 @@ export default function InkwellPage() {
             setDirty(false)
             setConflict(false)
           } else {
-            // The user typed during the agent's turn. Do NOT clobber the
-            // buffer and do NOT adopt the fresh token — the stale token makes
-            // the next autosave 409 loudly instead of silently overwriting
-            // the agent's edit.
-            setConflict(true)
+            // Interleaved edits (phase 4): the user typed during the agent's
+            // turn. Try a 3-way merge — base is the content this buffer was
+            // loaded from, all three sides are already in hand.
+            const m = threeWayMerge(doc.content ?? '', bufferRef.current, fresh.content ?? '')
+            if (m.clean) {
+              // Adopt the merge INTO THE BUFFER (stays dirty): the armed
+              // autosave persists it against the fresh token, so the merged
+              // state becomes server truth through the normal path.
+              setDoc(fresh)
+              baseShaRef.current = fresh.content_sha256 ?? null
+              setBuffer(m.merged)
+              setDirty(true)
+              setConflict(false)
+              setMerged(true)
+              if (debounceRef.current) clearTimeout(debounceRef.current)
+              debounceRef.current = setTimeout(() => { void flushSave(false) }, AUTOSAVE_DEBOUNCE_MS)
+            } else {
+              // Overlapping edits: keep the buffer AND the stale token — the
+              // next autosave 409s loudly instead of silently overwriting
+              // the agent's edit. The banner is the conflict UI.
+              setConflict(true)
+            }
           }
         } else {
           setDoc(fresh)
@@ -464,6 +506,11 @@ export default function InkwellPage() {
             {doc ? doc.name : 'Select or create a document'}
             {dirty ? ' •' : saving ? ' ⋯' : ''}
           </span>
+          {merged && !conflict && (
+            <span className="text-[12px] text-success">
+              Merged the co-author’s changes into your draft.
+            </span>
+          )}
           {conflict && (
             <span className="text-[12px] text-danger flex items-center gap-2">
               Changed on the server.
