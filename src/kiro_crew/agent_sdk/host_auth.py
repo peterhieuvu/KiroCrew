@@ -65,6 +65,7 @@ from kiro_crew.agent_sdk.backends import (
     ACP_BACKEND_CODEX,
     ACP_BACKEND_KAS,
     ACP_BACKEND_KIRO,
+    ACP_BACKEND_OPENCODE,
     ACP_BACKENDS_KNOWN,
 )
 
@@ -389,6 +390,43 @@ AGENT_AUTH_DECLARATIONS: Tuple[AgentAuthDeclaration, ...] = (
             "Claude Code is not signed in. Run `claude` in your terminal and "
             "complete its sign-in, then start a new chat."
         ),
+        host_logout_retires_children=False,
+        entitlement_source=ENTITLEMENT_OWN_CREDENTIAL_FILE,
+    ),
+    AgentAuthDeclaration(
+        backend=ACP_BACKEND_OPENCODE,
+        # opencode keeps its own token store under the XDG data directory, not a
+        # dotfile in $HOME. Declared here so the read gate fences it from an agent's
+        # file tools exactly as it fences codex's; the leaf is still HOME-relative
+        # because that is the floor's spelling.
+        credential_leaves=(".local/share/opencode/auth.json",),
+        # Deliberately EMPTY, though the harness honours ``XDG_DATA_HOME``. The
+        # floor re-anchors a declared leaf as ``<override root>/<leaf basename>``
+        # (``security.paths._OVERRIDE_ANCHORED_LEAVES``), which is right for
+        # ``CODEX_HOME`` -- that variable IS the directory holding ``auth.json`` --
+        # and wrong here: ``XDG_DATA_HOME`` names the PARENT of ``opencode/``, so
+        # anchoring would fence ``$XDG_DATA_HOME/auth.json``, a path the harness
+        # never writes, while the real relocated file went unfenced. A wrong anchor
+        # is worse than none because it reads as covered. Left out until the floor
+        # can anchor a leaf under a multi-segment override.
+        home_override_env_vars=(),
+        # Nothing excluded from the mask, for the same reason as Claude Code: this
+        # harness is outside ``tool_gate.ENFORCED_ROUTINGS`` (its ``SPAWN_ENV``
+        # routing is declared, not enforced), so no credential mask is applied and
+        # there is nothing to carve an exception out of.
+        adapter_own_leaves=(),
+        sign_in_remedy=(
+            "OpenCode is a separate tool that signs in on its own — run opencode auth "
+            "login, or name a provider in ~/.config/opencode/opencode.json. Neither "
+            "is checked here: the harness reads them."
+        ),
+        signed_out_message=(
+            "OpenCode is not signed in. Run `opencode auth login`, or name a "
+            "provider in ~/.config/opencode/opencode.json, then start a new chat."
+        ),
+        # Excluded deliberately: it signs in through its own store or its own
+        # provider configuration, so a ``kiro-cli logout`` says nothing about
+        # whether a running opencode session is still authenticated.
         host_logout_retires_children=False,
         entitlement_source=ENTITLEMENT_OWN_CREDENTIAL_FILE,
     ),

@@ -436,13 +436,25 @@ def test_mask_still_exposes_the_adapters_own_token() -> None:
     The deliberate asymmetry: this mask fences the CHILD, while the read gate still
     fences the same leaf for the agent's own file tools, so the two controls cover
     different readers.
+
+    Matched on the LEAF, not the basename. Two harnesses now store a token named
+    ``auth.json`` (codex under ``.codex/``, opencode under
+    ``.local/share/opencode/``), and a basename match would either pass while
+    codex's own token was masked or fail while another harness's token was
+    correctly hidden from codex's child -- which is the second assertion below.
     """
     masked = gate.adapter_hidden_credential_dirs(ACP_BACKEND_CODEX)
     own = gate.ADAPTER_OWN_CREDENTIAL_LEAVES[ACP_BACKEND_CODEX][0]
-    basename = own.split("/")[-1]
+    own_tail = own.replace("/", os.sep)
     assert not any(
-        entry.endswith(basename) for entry in masked
+        entry.endswith(own_tail) for entry in masked
     ), "the adapter's own OAuth token was masked, which would break its auth"
+    # Another harness's same-named token stays masked from this child: sparing
+    # codex's token must be by leaf, never by filename.
+    other_tail = os.path.join(".local", "share", "opencode", "auth.json")
+    assert any(
+        entry.endswith(other_tail) for entry in masked
+    ), "a different harness's auth.json was left readable to the codex child"
 
 
 def test_sandbox_off_refuses_an_enforced_adapter(monkeypatch: pytest.MonkeyPatch) -> None:

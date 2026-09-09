@@ -19,11 +19,14 @@ core can spell is an id an operator can choose unless something states the
 exception — pinned by
 `test_agent_backend_editable.py::test_baseline_ships_every_known_backend`, which
 guards against an undocumented NARROWING rather than a widening.
-There is no exception today: `NOT_SHIPPED_SELECTABLE` is empty, which is the
-healthy state. `ACP_BACKEND_CODEX` was the last member and left it once both
-halves landed — `backend_install.py` gained its probe, so the install row names
-the missing component and its command instead of reading `unknown`, and
-`acp_tool_gate` established that its tool calls reach the PreToolUse gate.
+There is one exception today: `ACP_BACKEND_OPENCODE` is in `NOT_SHIPPED_SELECTABLE`,
+for the two reasons named beside it — no install probe, and a tool-permission
+routing (`Routing.SPAWN_ENV`) that is declared but not yet enforced. Empty is the
+healthy state, and `ACP_BACKEND_CODEX` shows what leaving the list looks like: it
+was the previous member and left once both halves landed — `backend_install.py`
+gained its probe, so the install row names the missing component and its command
+instead of reading `unknown`, and `acp_tool_gate` established that its tool calls
+reach the PreToolUse gate.
 
 Read the invariants below against that tree: four harnesses can serve a real
 session today, so a site that spells "kiro" by exclusion is already wrong on
@@ -102,7 +105,7 @@ test still passes.
 |---|---|---|---|
 | H9 | `kiro-cli` remains the default branch of spawn-argv resolution, keeping its pre-spawn agent materialization (`kiro-cli` discovers selectable modes from `~/.kiro/agents/*.json` at startup, so a later `set_mode` fails with "Mode not found" without it) and its `--model` pin (the only way to run a model outside the agent's provider). A dict-of-builders refactor that treats Kiro as one entry among N drops both. | `test_harness_parity.py::test_kiro_spawn_argv_keeps_its_own_branch`, `::test_codex_spawn_keeps_its_own_branch` | `acp/runtime.py` (`AcpRuntime._resolve_spawn_argv`) |
 | H10 | Protocol version and client capabilities stay per-harness literals. Collapsing them to one handshake that every harness accepts silently downgrades the Kiro session's declared capabilities. | `test_harness_parity.py::test_handshake_is_per_backend` | `acp/runtime.py` (`AcpRuntime.spawn`), `acp/types.py` (`ACP_CLIENT_CAPABILITIES`, `KAS_CLIENT_CAPABILITIES`) |
-| H11 | The provider label is a closed mapping and an absent label means Kiro. It indexes resume compatibility, session-map persistence, and session-file cleanup routing, so a harness with no `PROVIDER_LABEL_*` of its own persists as a Kiro session and its transcript is pruned for want of a Kiro session file. | `test_harness_parity.py::test_every_known_backend_has_a_label`, `::test_codex_carries_its_own_provider_label` | `acp/types.py` (`PROVIDER_LABEL_*`), `providers/acp.py` (`provider_label`, `cleanup_session`), `session.py` (`detect_provider_switch`) |
+| H11 | The provider label is a closed mapping and an absent label means Kiro. It indexes resume compatibility, session-map persistence, and session-file cleanup routing, so a harness with no `PROVIDER_LABEL_*` of its own persists as a Kiro session and its transcript is pruned for want of a Kiro session file. | `test_harness_parity.py::test_every_known_backend_has_a_label`, `::test_codex_carries_its_own_provider_label`, `::test_opencode_carries_its_own_provider_label` | `acp/types.py` (`PROVIDER_LABEL_*`), `providers/acp.py` (`provider_label`, `cleanup_session`), `session.py` (`detect_provider_switch`) |
 | H12 | Model pre-flight keeps "empty or unknown advertised set means allow", and never compares ids across harness namespaces. Harnesses advertise ids in their own spelling; one shared membership test across two namespaces calls every legitimate model unusable and withholds the model. | `test_harness_parity.py::test_model_preflight_allows_unknown_advertised_set` | `acp/client.py` (`model_is_unusable`, `advertised_model_ids`) |
 
 ## Group D: review-only invariants
@@ -145,6 +148,6 @@ source of truth for what blocks.
    the id is named in that test's `NOT_SHIPPED_SELECTABLE` allowlist together
    with the reason it cannot be offered yet: the id becomes spellable but
    unreachable, and that state needs a stated reason rather than a default.
-   The allowlist is empty today. The full sequence a new
+   The allowlist names one id today (OpenCode). The full sequence a new
    harness walks, and which stage decides whether it lands dormant or
    selectable, is [harness-onboarding.md](harness-onboarding.md).

@@ -111,10 +111,11 @@ than by prose; see `docs/system-specs/modules/agent-host-contract.md`.
 
 ## Provenance of what is committed today
 
-Every fixture in this corpus is currently `synthesized`. Stated plainly because
-it bounds what the corpus proves: it locks the dispatch layer's behaviour against
-refactoring, which is what it was built for, and it does **not** prove that any
-backend really emits these shapes.
+Every fixture in this corpus except `opencode/` is `synthesized`. Stated plainly
+because it bounds what the corpus proves: a synthesized fixture locks the dispatch
+layer's behaviour against refactoring, which is what it was built for, and it does
+**not** prove that any backend really emits these shapes. The one live corpus does
+prove that, for one backend and one version.
 
 | Directory | Backend id | Provenance | Why |
 |---|---|---|---|
@@ -122,6 +123,7 @@ backend really emits these shapes.
 | `kas/` | `kas` | synthesized | Reached through the kiro-cli relay, so same as above. The `_meta.kiro` discriminants follow `src/kiro_crew/acp/kas_wire.py`. |
 | `claude/` | `claude` | synthesized | `claude-agent-acp` was not installed on the recording host. |
 | `codex/` | `codex` | synthesized | `codex-acp` was not installed on the recording host. |
+| `opencode/` | `opencode` | **live** | Captured off OpenCode 1.18.15 serving `opencode acp`, split into one file per turn (`bash.jsonl`, `read.jsonl`). Hand-reviewed and redacted per the section above: paths, the recording user, and the `model` option's value list (truncated to four ids, display names replaced by ids — the full list is the recording host's provider configuration, not a property of the harness). |
 
 Replacing any row with a live capture is a strict improvement and needs no
 change to the test. Record it, set `recorded` to `live`, fill in the real

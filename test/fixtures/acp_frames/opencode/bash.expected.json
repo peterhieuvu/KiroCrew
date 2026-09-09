@@ -1,0 +1,338 @@
+[
+  {
+    "agent_capabilities": {
+      "loadSession": true,
+      "mcpCapabilities": {
+        "http": true,
+        "sse": true
+      },
+      "promptCapabilities": {
+        "embeddedContext": true,
+        "image": true
+      },
+      "sessionCapabilities": {
+        "close": {},
+        "fork": {},
+        "list": {},
+        "resume": {}
+      }
+    },
+    "agent_version": "1.18.15",
+    "frame": "response",
+    "id": 1,
+    "protocol_version": 1
+  },
+  {
+    "config_options": [
+      {
+        "category": "model",
+        "currentValue": "amazon-bedrock/openai.gpt-5.4",
+        "id": "model",
+        "name": "Model",
+        "options": [
+          {
+            "name": "amazon-bedrock/openai.gpt-5.4",
+            "value": "amazon-bedrock/openai.gpt-5.4"
+          },
+          {
+            "name": "amazon-bedrock/au.anthropic.claude-opus-4-6-v1",
+            "value": "amazon-bedrock/au.anthropic.claude-opus-4-6-v1"
+          },
+          {
+            "name": "amazon-bedrock/au.anthropic.claude-sonnet-4-6",
+            "value": "amazon-bedrock/au.anthropic.claude-sonnet-4-6"
+          },
+          {
+            "name": "amazon-bedrock/anthropic.claude-fable-5",
+            "value": "amazon-bedrock/anthropic.claude-fable-5"
+          }
+        ],
+        "type": "select"
+      },
+      {
+        "category": "thought_level",
+        "currentValue": "none",
+        "description": "Available effort levels for this model",
+        "id": "effort",
+        "name": "Effort",
+        "options": [
+          {
+            "name": "None",
+            "value": "none"
+          },
+          {
+            "name": "Low",
+            "value": "low"
+          },
+          {
+            "name": "Medium",
+            "value": "medium"
+          },
+          {
+            "name": "High",
+            "value": "high"
+          },
+          {
+            "name": "Xhigh",
+            "value": "xhigh"
+          }
+        ],
+        "type": "select"
+      },
+      {
+        "category": "mode",
+        "currentValue": "build",
+        "id": "mode",
+        "name": "Session Mode",
+        "options": [
+          {
+            "description": "The default agent. Executes tools based on configured permissions.",
+            "name": "build",
+            "value": "build"
+          },
+          {
+            "description": "Plan mode. Disallows all edit tools.",
+            "name": "plan",
+            "value": "plan"
+          }
+        ],
+        "type": "select"
+      }
+    ],
+    "frame": "response",
+    "id": 2,
+    "session_id": "ses_f7b1a7407ffegMvFHyAbIrCX0Y"
+  },
+  {
+    "action": "update",
+    "events": [],
+    "frame": "session/update",
+    "session_update": "available_commands_update"
+  },
+  {
+    "action": "update",
+    "events": [
+      {
+        "is_shell": true,
+        "kind": "tool_call",
+        "raw_tool_params": {
+          "cwd": "~/project"
+        },
+        "title": "bash",
+        "tool_call_id": "call_a8b0a86389e45ca6acf5668e925307cf",
+        "tool_input": "{\n  \"cwd\": \"~/project\"\n}",
+        "tool_kind": "execute",
+        "wire_title": "bash"
+      }
+    ],
+    "frame": "session/update",
+    "session_update": "tool_call"
+  },
+  {
+    "action": "update",
+    "events": [
+      {
+        "is_shell": true,
+        "kind": "tool_call_update",
+        "raw_tool_params": {
+          "command": "id -un",
+          "workdir": "~/project"
+        },
+        "title": "id -un",
+        "tool_call_id": "call_a8b0a86389e45ca6acf5668e925307cf",
+        "tool_input": "{\n  \"command\": \"id -un\",\n  \"workdir\": \"~/project\"\n}",
+        "tool_kind": "execute",
+        "wire_title": "id -un"
+      }
+    ],
+    "frame": "session/update",
+    "session_update": "tool_call_update"
+  },
+  {
+    "action": "permission",
+    "events": [
+      {
+        "is_shell": true,
+        "kind": "permission_request",
+        "mcp_identity_trusted": true,
+        "options": [
+          {
+            "id": "once",
+            "label": "Allow once"
+          },
+          {
+            "id": "always",
+            "label": "Always allow"
+          },
+          {
+            "id": "reject",
+            "label": "Reject"
+          }
+        ],
+        "raw_params_trusted": true,
+        "raw_tool_params": {
+          "command": "id -un",
+          "workdir": "~/project"
+        },
+        "shell_classified": true,
+        "title": "id -un",
+        "tool_call_id": "call_a8b0a86389e45ca6acf5668e925307cf",
+        "tool_input": "{\n  \"command\": \"id -un\",\n  \"workdir\": \"~/project\"\n}",
+        "tool_kind": "execute"
+      }
+    ],
+    "frame": "session/request_permission",
+    "recorded_options": {
+      "always": "always",
+      "once": "once",
+      "reject": "reject"
+    }
+  },
+  {
+    "action": "update",
+    "events": [
+      {
+        "is_shell": true,
+        "kind": "tool_call_update",
+        "raw_tool_params": {
+          "command": "id -un",
+          "workdir": "~/project"
+        },
+        "title": "id -un",
+        "tool_call_id": "call_a8b0a86389e45ca6acf5668e925307cf",
+        "tool_input": "{\n  \"command\": \"id -un\",\n  \"workdir\": \"~/project\"\n}",
+        "tool_kind": "execute",
+        "wire_title": "id -un"
+      }
+    ],
+    "frame": "session/update",
+    "session_update": "tool_call_update"
+  },
+  {
+    "action": "update",
+    "events": [
+      {
+        "kind": "tool_result",
+        "tool_call_id": "call_a8b0a86389e45ca6acf5668e925307cf",
+        "tool_output": "user\n"
+      },
+      {
+        "is_shell": true,
+        "kind": "tool_call_update",
+        "raw_tool_params": {
+          "command": "id -un",
+          "workdir": "~/project"
+        },
+        "title": "id -un",
+        "tool_call_id": "call_a8b0a86389e45ca6acf5668e925307cf",
+        "tool_input": "{\n  \"command\": \"id -un\",\n  \"workdir\": \"~/project\"\n}",
+        "tool_kind": "execute",
+        "wire_title": "id -un"
+      }
+    ],
+    "frame": "session/update",
+    "session_update": "tool_call_update"
+  },
+  {
+    "action": "update",
+    "events": [
+      {
+        "kind": "tool_result",
+        "tool_call_id": "call_a8b0a86389e45ca6acf5668e925307cf",
+        "tool_final": true,
+        "tool_output": "user\n"
+      },
+      {
+        "is_shell": true,
+        "kind": "tool_call_update",
+        "title": "id -un",
+        "tool_call_id": "call_a8b0a86389e45ca6acf5668e925307cf",
+        "wire_title": "id -un"
+      }
+    ],
+    "frame": "session/update",
+    "session_update": "tool_call_update"
+  },
+  {
+    "action": "update",
+    "events": [
+      {
+        "kind": "text_chunk",
+        "text": "`"
+      }
+    ],
+    "frame": "session/update",
+    "session_update": "agent_message_chunk",
+    "text_chunk": {
+      "text": "`",
+      "thinking": false
+    }
+  },
+  {
+    "action": "update",
+    "events": [
+      {
+        "kind": "text_chunk",
+        "text": "pe"
+      }
+    ],
+    "frame": "session/update",
+    "session_update": "agent_message_chunk",
+    "text_chunk": {
+      "text": "pe",
+      "thinking": false
+    }
+  },
+  {
+    "action": "update",
+    "events": [
+      {
+        "kind": "text_chunk",
+        "text": "vu"
+      }
+    ],
+    "frame": "session/update",
+    "session_update": "agent_message_chunk",
+    "text_chunk": {
+      "text": "vu",
+      "thinking": false
+    }
+  },
+  {
+    "action": "update",
+    "events": [
+      {
+        "kind": "text_chunk",
+        "text": "`"
+      }
+    ],
+    "frame": "session/update",
+    "session_update": "agent_message_chunk",
+    "text_chunk": {
+      "text": "`",
+      "thinking": false
+    }
+  },
+  {
+    "action": "update",
+    "events": [],
+    "frame": "session/update",
+    "session_update": "usage_update",
+    "usage": [
+      6006,
+      272000
+    ],
+    "usage_cost": 0.00555225
+  },
+  {
+    "frame": "response",
+    "id": 3,
+    "prompt_tokens": [
+      316,
+      8,
+      5690,
+      0
+    ],
+    "stop_reason": "end_turn"
+  }
+]
