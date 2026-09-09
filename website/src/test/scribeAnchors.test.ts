@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
-import { buildTextIndex, normalizeQuote, resolveAnchor, resolveThreads } from '../apps/scribe/anchors'
+import { buildTextIndex, normalizeQuote, resolveAnchor, resolveThreads, snapToWordBounds } from '../apps/scribe/anchors'
 
 function makeEditor(markdown: string): Editor {
   return new Editor({
@@ -141,6 +141,62 @@ describe('resolveAnchor', () => {
   it('orphans a quote that no longer exists', () => {
     const e = makeEditor(CORPUS.mixed)
     expect(resolveAnchor(e.state.doc, { quote: 'text that was deleted long ago' })).toBeNull()
+    e.destroy()
+  })
+})
+
+describe('snapToWordBounds', () => {
+  // "The quick brown fox jumps." — positions: doc starts at 1 (paragraph
+  // open), text starts at 1 in a single-paragraph doc... resolve via search
+  // instead of hand-counted offsets so the tests stay robust.
+  function posOf(doc: import('@tiptap/pm/model').Node, substr: string): number {
+    const { text, positions } = buildTextIndex(doc)
+    const i = text.indexOf(substr)
+    expect(i).toBeGreaterThanOrEqual(0)
+    return positions[i]
+  }
+
+  it('expands a mid-word selection outward to whole words', () => {
+    const e = makeEditor('The quick brown fox jumps.\n')
+    const doc = e.state.doc
+    // select "uick bro" (mid-word on both ends)
+    const from = posOf(doc, 'uick')
+    const to = posOf(doc, 'own') + 3
+    const snapped = snapToWordBounds(doc, from, to)
+    expect(doc.textBetween(snapped.from, snapped.to, ' ')).toBe('quick brown')
+    e.destroy()
+  })
+
+  it('leaves an exact word-bounded selection unchanged', () => {
+    const e = makeEditor('The quick brown fox jumps.\n')
+    const doc = e.state.doc
+    const from = posOf(doc, 'quick')
+    const to = posOf(doc, 'brown') + 5
+    const snapped = snapToWordBounds(doc, from, to)
+    expect(snapped).toEqual({ from, to })
+    e.destroy()
+  })
+
+  it('snaps each end within its own block for cross-block selections', () => {
+    const e = makeEditor('First paragraph ends here.\n\nSecond starts now.\n')
+    const doc = e.state.doc
+    const from = posOf(doc, 'nds here.') // mid-word "ends"
+    const to = posOf(doc, 'econd') + 5 // mid-word "Second"
+    const snapped = snapToWordBounds(doc, from, to)
+    const covered = doc.textBetween(snapped.from, snapped.to, ' ')
+    expect(covered.startsWith('ends here.')).toBe(true)
+    expect(covered.endsWith('Second')).toBe(true)
+    e.destroy()
+  })
+
+  it('snapped quotes cover word-into-word marks (the ragged-anchor fix)', () => {
+    const e = makeEditor('Some **bold** words in a sentence.\n')
+    const doc = e.state.doc
+    // drag started inside "bold" and ended inside "words"
+    const from = posOf(doc, 'old')
+    const to = posOf(doc, 'wor') + 2
+    const snapped = snapToWordBounds(doc, from, to)
+    expect(normalizeQuote(doc.textBetween(snapped.from, snapped.to, ' '))).toBe('bold words')
     e.destroy()
   })
 })

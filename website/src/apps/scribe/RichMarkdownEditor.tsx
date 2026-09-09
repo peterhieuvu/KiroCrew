@@ -30,7 +30,7 @@ import {
   MessageSquarePlus, Minus, Redo2, SquareCode, Strikethrough, TextQuote, Undo2,
 } from 'lucide-react'
 import { IconButton } from '../../components/ui'
-import { resolveThreads, type CommentThread, type CommentAnchor } from './anchors'
+import { resolveThreads, snapToWordBounds, type CommentThread, type CommentAnchor } from './anchors'
 import { CommentHighlights, commentHighlightsKey } from './commentHighlights'
 import { applySuggestion } from './suggestions'
 import './richEditor.css'
@@ -160,7 +160,11 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   const [commentSel, setCommentSel] = useState<{ quote: string; x: number; y: number } | null>(null)
   const settleSelection = () => {
     if (!onComment || !editor) return
-    const { from, to } = editor.state.selection
+    // Snap outward to word boundaries: ragged free-hand anchors under-cover
+    // the passage and leave remnants when a suggestion replaces the range
+    // (live-verification finding, 2026-09-08).
+    const sel = editor.state.selection
+    const { from, to } = snapToWordBounds(editor.state.doc, sel.from, sel.to)
     const quote = editor.state.doc.textBetween(from, to, ' ').replace(/\s+/g, ' ').trim()
     if (quote.length < MIN_QUOTE_LEN) {
       setCommentSel(null)

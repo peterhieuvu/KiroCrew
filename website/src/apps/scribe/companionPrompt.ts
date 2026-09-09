@@ -29,7 +29,9 @@ export function companionContextLines(
       : []),
     'The author is editing it live in another pane: read the current content'
       + ' before every change, keep its markdown style, and never rewrite'
-      + ' sections the author did not ask about.',
+      + ' sections the author did not ask about. Never append link lines,'
+      + ' references to the artifact itself, or sign-offs to the document —'
+      + ' write only the content the author asked for.',
     'The author can anchor comments to passages. When asked to address'
       + ' comments, read them with artifact_get_comments, act on each open'
       + ' thread, reply on the thread, and advance it with'

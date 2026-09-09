@@ -158,6 +158,46 @@ export function resolveAnchor(doc: PMNode, anchor: CommentAnchor): ResolvedAncho
   return { from, to }
 }
 
+/** Snap a selection range outward to word boundaries within its textblocks.
+ *
+ *  Live-verification finding (2026-09-08): free-hand drags produce ragged
+ *  anchors — a quote that under-covers its sentence leaves remnants when a
+ *  suggestion replaces the anchored range. Snapping each end outward to the
+ *  nearest whitespace makes quotes cover whole words, so proposals replace
+ *  what a reader would consider "the passage".
+ *
+ *  Each end snaps within its OWN textblock (a cross-block selection cannot
+ *  expand past block edges). Positions are clamped to the block's text-node
+ *  span; inline leaf nodes (hard breaks) bound the walk like whitespace.
+ */
+export function snapToWordBounds(
+  doc: PMNode,
+  from: number,
+  to: number,
+): { from: number; to: number } {
+  const clamp = (n: number) => Math.max(0, Math.min(n, doc.content.size))
+  let a = clamp(from)
+  let b = clamp(Math.max(from, to))
+
+  const $a = doc.resolve(a)
+  if ($a.parent.isTextblock) {
+    const text = $a.parent.textContent
+    let off = Math.min($a.parentOffset, text.length)
+    while (off > 0 && !/\s/.test(text[off - 1])) off -= 1
+    a = $a.start() + off
+  }
+
+  const $b = doc.resolve(b)
+  if ($b.parent.isTextblock) {
+    const text = $b.parent.textContent
+    let off = Math.min($b.parentOffset, text.length)
+    while (off < text.length && !/\s/.test(text[off])) off += 1
+    b = $b.start() + off
+  }
+
+  return { from: a, to: Math.max(a, b) }
+}
+
 export interface CommentThread {
   id: string
   body: string
