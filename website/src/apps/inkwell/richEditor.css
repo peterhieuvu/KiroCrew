@@ -100,3 +100,8 @@
   background: color-mix(in srgb, var(--success, #22a06b) 15%, transparent);
   border-bottom-color: color-mix(in srgb, var(--success, #22a06b) 50%, transparent);
 }
+.inkwell-rich .inkwell-comment-hl--resolved {
+  background: color-mix(in srgb, var(--muted, #888) 10%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--muted, #888) 35%, transparent);
+  border-bottom-style: dashed;
+}

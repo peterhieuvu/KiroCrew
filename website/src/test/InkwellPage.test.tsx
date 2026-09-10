@@ -47,13 +47,14 @@ const applySuggestionMock = vi.hoisted(() => vi.fn().mockReturnValue(true))
 vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
   const React = await import('react')
   return {
-    default: React.forwardRef(function Stub({ value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick }: {
+    default: React.forwardRef(function Stub({ value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick, onCaretContext }: {
       value: string
       onChange: (md: string) => void
       onComment?: (q: string, at: { x: number; y: number }) => void
       commentThreads?: { id: string }[]
       onThreadsResolved?: (ids: string[]) => void
       onThreadClick?: (id: string) => void
+      onCaretContext?: (c: { blockIndex: number; selection: string | null; threadId: string | null }) => void
     }, ref: React.Ref<unknown>) {
       React.useImperativeHandle(ref, () => ({
         applySuggestion: applySuggestionMock,
@@ -68,6 +69,8 @@ vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
           {commentThreads?.map(t => (
             <button key={t.id} type="button" onClick={() => onThreadClick?.(t.id)}>{`stub-open-${t.id}`}</button>
           ))}
+          <button type="button" onClick={() => onCaretContext?.({ blockIndex: 0, selection: null, threadId: 't1' })}>stub-caret-in-t1</button>
+          <button type="button" onClick={() => onCaretContext?.({ blockIndex: 0, selection: 'some words', threadId: null })}>stub-range-select</button>
           <span data-testid="thread-count">{commentThreads?.length ?? 0}</span>
         </div>
       )
@@ -203,6 +206,24 @@ describe('threads strip', () => {
     expect(list).toHaveTextContent('source?')
     expect(list).toHaveTextContent('orphaned')
     expect(list).not.toHaveTextContent('tighten this') // anchored ones stay out
+  })
+
+  it('Show-resolved toggle reveals resolved roots; the open-count badge is unaffected; Reopen is wired', async () => {
+    apiMock.artifactComments.mockResolvedValue({ comments: THREADS })
+    ;(apiMock as Record<string, unknown>).reopenComment = vi.fn().mockResolvedValue({})
+    await openDoc()
+    expect(screen.getByTestId('thread-count').textContent).toBe('2') // editor gets open roots only
+    const toggle = screen.getByTestId('inkwell-show-resolved')
+    expect(toggle).toHaveTextContent('1 resolved')
+    fireEvent.click(toggle)
+    expect(screen.getByTestId('thread-count').textContent).toBe('3') // t3 now decorated
+    expect(screen.getByTestId('inkwell-thread-count').textContent).toBe('2 threads') // badge = open only
+    fireEvent.click(screen.getByText('stub-open-t3'))
+    const pop = await screen.findByTestId('inkwell-thread-popover')
+    expect(pop).toHaveTextContent('done already')
+    expect(screen.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+    await waitFor(() => expect((apiMock as Record<string, ReturnType<typeof vi.fn>>).reopenComment).toHaveBeenCalledWith('notes', 't3'))
   })
 })
 
@@ -353,6 +374,25 @@ describe('interleaved-edit merge (phase 4)', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(900) })
     expect(screen.getByText(/Changed on the server/)).toBeInTheDocument()
     expect(screen.getByTestId('editor-value').textContent).toContain('omega user-edit') // buffer intact
+  })
+})
+
+describe('caret-follow and selection', () => {
+  const THREADS = [{ id: 't1', body: 'tighten this', status: 'open', anchor: { quote: 'q1' } }]
+
+  it('a caret inside a highlight opens its thread; a range selection closes it so the pill is reachable', async () => {
+    apiMock.artifactComments.mockResolvedValue({ comments: THREADS })
+    await openDoc()
+    fireEvent.click(screen.getByText('stub-caret-in-t1'))
+    expect(await screen.findByTestId('inkwell-thread-popover')).toBeInTheDocument()
+    // User starts drag-selecting (possibly inside the same highlight): the
+    // thread popover must get out of the way — new comments are allowed here.
+    fireEvent.click(screen.getByText('stub-range-select'))
+    expect(screen.queryByTestId('inkwell-thread-popover')).not.toBeInTheDocument()
+    // The pill click then opens the composer at the selection.
+    fireEvent.click(screen.getByText('stub-select'))
+    expect(screen.getByTestId('inkwell-comment-composer')).toBeInTheDocument()
+    expect(screen.queryByTestId('inkwell-thread-popover')).not.toBeInTheDocument()
   })
 })
 

@@ -202,7 +202,7 @@ describe('snapToWordBounds', () => {
 })
 
 describe('resolveThreads', () => {
-  it('splits threads into highlights and orphans, skipping replies and resolved', () => {
+  it('splits threads into highlights and orphans, skipping replies; status filtering is the caller’s job', () => {
     const e = makeEditor(CORPUS.mixed)
     const { highlights, orphanedIds } = resolveThreads(e.state.doc, [
       { id: 'a', body: 'x', status: 'open', anchor: { quote: 'point one' } },
@@ -211,7 +211,9 @@ describe('resolveThreads', () => {
       { id: 'd', body: 'x', status: 'resolved', anchor: { quote: 'point two' } },
       { id: 'e', body: 'no anchor', status: 'open' },
     ])
-    expect(highlights.map(h => h.id)).toEqual(['a'])
+    // 'd' is resolved but still decorated — the page decides whether to pass it.
+    expect(highlights.map(h => h.id)).toEqual(['a', 'd'])
+    expect(highlights.find(h => h.id === 'd')?.status).toBe('resolved')
     expect(orphanedIds).toEqual(['b'])
     e.destroy()
   })

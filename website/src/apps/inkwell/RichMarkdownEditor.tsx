@@ -295,9 +295,11 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
           title="Open comment thread"
           onClick={() => onThreadClick(m.id)}
           className={`absolute right-1 h-3 w-3 rounded-full border cursor-pointer p-0 transition-colors ${
-            m.status === 'review'
-              ? 'bg-success/30 border-success/60 hover:bg-success/60'
-              : 'bg-accent/30 border-accent/60 hover:bg-accent/60'
+            m.status === 'resolved'
+              ? 'bg-transparent border-border border-dashed hover:bg-bg-hover'
+              : m.status === 'review'
+                ? 'bg-success/30 border-success/60 hover:bg-success/60'
+                : 'bg-accent/30 border-accent/60 hover:bg-accent/60'
           }`}
           style={{ top: m.top + 4 }}
         />

@@ -99,11 +99,14 @@ export default function InkwellPage() {
   // highlight click, a gutter marker click, or the caret entering a range;
   // closes when the caret leaves, on Escape, or on click-outside.
   const [focusThread, setFocusThread] = useState<string | null>(null)
-  // Caret-follow: entering a highlight opens it; leaving closes it. Runs off
-  // the editor's caret context so a plain click into prose dismisses.
+  // Caret-follow: a CARET inside a highlight opens its thread; a RANGE
+  // selection anywhere closes it — the user is about to comment (the pill
+  // needs the space and must not be occluded), so a fresh comment can be
+  // started inside an existing highlight. Caret leaving all highlights closes.
   useEffect(() => {
-    if (caretCtx.threadId) setFocusThread(caretCtx.threadId)
-    else if (caretCtx.selection === null) setFocusThread(null)
+    if (caretCtx.selection !== null) setFocusThread(null)
+    else if (caretCtx.threadId) setFocusThread(caretCtx.threadId)
+    else setFocusThread(null)
   }, [caretCtx])
 
   const fetchThreads = useCallback(async (slug: string) => {
@@ -478,10 +481,30 @@ export default function InkwellPage() {
     }
   }, [doc, fetchThreads])
 
-  // Root, unresolved threads drive both the strip and (via the editor) the
-  // decorations. Orphan verdict = server flag OR local resolution miss.
-  const rootThreads = useMemo(
+  const reopenThread = useCallback(async (id: string) => {
+    if (!doc) return
+    try {
+      await api.reopenComment(doc.slug, id)
+      void fetchThreads(doc.slug)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [doc, fetchThreads])
+
+  // Root threads. `openRoots` drives the badge count and nudging; `visibleRoots`
+  // is what gets decorated and listed — resolved ones only when the toggle is
+  // on (default off: done threads should not clutter the passage).
+  const [showResolved, setShowResolved] = useState(false)
+  const openRoots = useMemo(
     () => threads.filter(t => !t.parent_id && t.status !== 'resolved'),
+    [threads],
+  )
+  const rootThreads = useMemo(
+    () => (showResolved ? threads.filter(t => !t.parent_id) : openRoots),
+    [threads, openRoots, showResolved],
+  )
+  const resolvedCount = useMemo(
+    () => threads.filter(t => !t.parent_id && t.status === 'resolved').length,
     [threads],
   )
   const isOrphaned = useCallback(
@@ -584,14 +607,28 @@ export default function InkwellPage() {
             {doc ? doc.name : 'Select or create a document'}
             {dirty ? ' •' : saving ? ' ⋯' : ''}
           </span>
-          {doc && rootThreads.length > 0 && (
+          {doc && openRoots.length > 0 && (
             <span
               className="text-[11px] rounded-full bg-accent/15 text-accent px-2 py-0.5"
-              title={`${rootThreads.length} open comment thread${rootThreads.length === 1 ? '' : 's'} — click a highlight or gutter dot to open one`}
+              title={`${openRoots.length} open comment thread${openRoots.length === 1 ? '' : 's'} — click a highlight or gutter dot to open one`}
               data-testid="inkwell-thread-count"
             >
-              {rootThreads.length} {rootThreads.length === 1 ? 'thread' : 'threads'}
+              {openRoots.length} {openRoots.length === 1 ? 'thread' : 'threads'}
             </span>
+          )}
+          {doc && resolvedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowResolved(v => !v)}
+              aria-pressed={showResolved}
+              title={showResolved ? 'Hide resolved threads' : `Show ${resolvedCount} resolved thread${resolvedCount === 1 ? '' : 's'}`}
+              className={`text-[11px] rounded-full px-2 py-0.5 border cursor-pointer transition-colors ${
+                showResolved ? 'bg-bg-hover text-text border-border' : 'bg-transparent text-muted border-border/60 hover:text-text'
+              }`}
+              data-testid="inkwell-show-resolved"
+            >
+              {showResolved ? 'Hide resolved' : `${resolvedCount} resolved`}
+            </button>
           )}
           {merged && !conflict && (
             <span className="text-[12px] text-success">
@@ -673,6 +710,7 @@ export default function InkwellPage() {
               onAccept={() => void acceptSuggestion(focusedRoot)}
               onReject={() => void rejectSuggestion(focusedRoot)}
               onResolve={() => void resolveThread(focusedRoot.id)}
+              onReopen={() => void reopenThread(focusedRoot.id)}
               onReply={text => replyToThread(focusedRoot, text)}
               onClose={() => setFocusThread(null)}
             />

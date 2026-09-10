@@ -22,6 +22,7 @@ interface Props {
   onAccept: () => void
   onReject: () => void
   onResolve: () => void
+  onReopen: () => void
   onReply: (text: string) => Promise<void>
   onClose: () => void
 }
@@ -33,7 +34,7 @@ function bodyWithoutFence(body: string): string {
 }
 
 export default function ThreadPopover({
-  root, replies, suggestion, orphaned, anchor, onAccept, onReject, onResolve, onReply, onClose,
+  root, replies, suggestion, orphaned, anchor, onAccept, onReject, onResolve, onReopen, onReply, onClose,
 }: Props) {
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
@@ -79,7 +80,8 @@ export default function ThreadPopover({
     >
       <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border shrink-0">
         <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
-          root.status === 'review' ? 'bg-success/15 text-success' : 'bg-accent/15 text-accent'
+          root.status === 'resolved' ? 'bg-bg-hover text-muted'
+            : root.status === 'review' ? 'bg-success/15 text-success' : 'bg-accent/15 text-accent'
         }`}>{root.status}</span>
         {orphaned && (
           <span className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn" title="The anchored passage no longer exists in the document">orphaned</span>
@@ -122,7 +124,9 @@ export default function ThreadPopover({
           <button type="button" onClick={() => void send()} disabled={!reply.trim() || sending} className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text hover:bg-bg-hover cursor-pointer disabled:opacity-50 disabled:cursor-default">Reply</button>
         </div>
         <div className="flex items-center gap-1.5 justify-end">
-          {suggestion !== undefined ? (
+          {root.status === 'resolved' ? (
+            <button type="button" onClick={onReopen} title="Reopen this thread" className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text hover:bg-bg-hover cursor-pointer">Reopen</button>
+          ) : suggestion !== undefined ? (
             <>
               <button type="button" onClick={onAccept} disabled={orphaned} title={orphaned ? 'Cannot apply: the passage no longer exists' : 'Apply the proposed replacement and resolve'} className="rounded-md border border-success/40 bg-success/10 px-2 py-1 text-[11px] text-success hover:bg-success/20 cursor-pointer disabled:opacity-50 disabled:cursor-default">Accept</button>
               <button type="button" onClick={onReject} title="Decline the proposal and resolve" className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-muted hover:text-text hover:bg-bg-hover cursor-pointer">Reject</button>

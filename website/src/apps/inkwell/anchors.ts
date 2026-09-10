@@ -216,6 +216,8 @@ export interface ThreadHighlight {
 }
 
 /** Resolve every ROOT thread with an anchor; replies ride their parent.
+ *  Which statuses to include is the CALLER's decision (the page's
+ *  Show-resolved toggle) — this function decorates whatever it is handed.
  *  Returns highlights for resolvable threads and ids of orphaned ones. */
 export function resolveThreads(
   doc: PMNode,
@@ -224,7 +226,7 @@ export function resolveThreads(
   const highlights: ThreadHighlight[] = []
   const orphanedIds: string[] = []
   for (const c of comments) {
-    if (c.parent_id || !c.anchor || c.status === 'resolved') continue
+    if (c.parent_id || !c.anchor) continue
     const r = resolveAnchor(doc, c.anchor)
     if (r) highlights.push({ id: c.id, status: c.status, from: r.from, to: r.to })
     else orphanedIds.push(c.id)
