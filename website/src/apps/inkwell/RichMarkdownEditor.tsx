@@ -30,7 +30,7 @@ import {
   MessageSquarePlus, Minus, Redo2, SquareCode, Strikethrough, TextQuote, Undo2,
 } from 'lucide-react'
 import { IconButton } from '../../components/ui'
-import { resolveThreads, snapToWordBounds, type CommentThread, type CommentAnchor } from './anchors'
+import { anchorForSelection, resolveThreads, snapToWordBounds, type CommentThread, type CommentAnchor } from './anchors'
 import { CommentHighlights, commentHighlightsKey, liveThreadRanges, threadAtPos } from './commentHighlights'
 import { applySuggestion } from './suggestions'
 import './richEditor.css'
@@ -45,7 +45,7 @@ interface Props {
    * it hands the selected text (whitespace-collapsed, capped) to the host so
    * it can attach an instruction and route it to the co-author.
    */
-  onComment?: (quote: string, at: { x: number; y: number }) => void
+  onComment?: (anchor: CommentAnchor, at: { x: number; y: number }) => void
   /** Root comment threads to resolve and decorate. Replies and resolved
    *  threads are skipped by the resolver. */
   commentThreads?: CommentThread[]
@@ -197,7 +197,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   // Settled on mouseup/keyup rather than every transaction so the pill does
   // not flicker mid-drag. Position comes from the editor's own coordsAtPos —
   // relative to the outer wrapper, like DocView's rect math.
-  const [commentSel, setCommentSel] = useState<{ quote: string; x: number; y: number } | null>(null)
+  const [commentSel, setCommentSel] = useState<{ anchor: CommentAnchor; x: number; y: number } | null>(null)
   const settleSelection = () => {
     if (!onComment || !editor) return
     // Snap outward to word boundaries: ragged free-hand anchors under-cover
@@ -210,11 +210,18 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
       setCommentSel(null)
       return
     }
+    // Full anchor (prefix/suffix/offsets) so a repeated passage resolves to
+    // THIS occurrence, not the first one in the document.
+    const anchor = anchorForSelection(editor.state.doc, from, quote.slice(0, MAX_QUOTE_LEN))
+    if (!anchor) {
+      setCommentSel(null)
+      return
+    }
     const host = wrapRef.current?.getBoundingClientRect()
     if (!host) return
     const coords = editor.view.coordsAtPos(to)
     setCommentSel({
-      quote: quote.slice(0, MAX_QUOTE_LEN),
+      anchor,
       x: Math.min(coords.left - host.left, host.width - 96),
       y: coords.bottom - host.top + 6,
     })
@@ -314,9 +321,9 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
           // collapse the selection, and re-settle the pill away mid-press.
           onMouseDown={e => {
             e.preventDefault()
-            const quote = commentSel.quote
+            const anchor = commentSel.anchor
             setCommentSel(null)
-            onComment?.(quote, { x: commentSel.x, y: commentSel.y })
+            onComment?.(anchor, { x: commentSel.x, y: commentSel.y })
           }}
         >
           <MessageSquarePlus size={13} /> Comment

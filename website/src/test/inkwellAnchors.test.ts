@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
-import { buildTextIndex, normalizeQuote, resolveAnchor, resolveThreads, snapToWordBounds } from '../apps/inkwell/anchors'
+import { anchorForSelection, buildTextIndex, normalizeQuote, resolveAnchor, resolveThreads, snapToWordBounds } from '../apps/inkwell/anchors'
 
 function makeEditor(markdown: string): Editor {
   return new Editor({
@@ -121,6 +121,51 @@ describe('resolveAnchor', () => {
     expect(after!.from).toBeGreaterThan(before!.from) // shifted, still found
     const covered = e.state.doc.textBetween(after!.from, after!.to, ' ')
     expect(normalizeQuote(covered)).toBe('Beta sentence here.')
+    e.destroy()
+  })
+
+  it('REGRESSION: a comment on the LAST of four identical lines stays on the last line', () => {
+    // Live finding 2026-09-10: quote-only anchors on repeated text floated
+    // back to the first occurrence. The creation-side helper must record
+    // enough context for the resolver to pick THIS occurrence.
+    const e = makeEditor('# T\n\nHello\n\nasdf\n\nasdf\n\nasdf\n\nasdf\n')
+    // Find the PM range of the 4th "asdf" by walking textblocks.
+    const starts: number[] = []
+    e.state.doc.descendants((n, pos) => {
+      if (n.isTextblock && n.textContent === 'asdf') starts.push(pos + 1)
+      return true
+    })
+    expect(starts).toHaveLength(4)
+    const from = starts[3]
+    const anchor = anchorForSelection(e.state.doc, from, 'asdf')
+    expect(anchor).not.toBeNull()
+    expect(anchor!.start_offset).toBeGreaterThan(0)
+    expect(anchor!.prefix).toContain('asdf asdf')
+    const r = resolveAnchor(e.state.doc, anchor!)
+    expect(r!.from).toBe(from)
+    // And the first line still resolves to the first line.
+    const a0 = anchorForSelection(e.state.doc, starts[0], 'asdf')!
+    expect(resolveAnchor(e.state.doc, a0)!.from).toBe(starts[0])
+    // Legacy quote-only anchors keep the old (first-hit) behaviour — stable, not biased.
+    expect(resolveAnchor(e.state.doc, { quote: 'asdf' })!.from).toBe(starts[0])
+    e.destroy()
+  })
+
+  it('a full anchor on a repeated line survives an edit above it (context wins over offset)', () => {
+    const e = makeEditor('Intro\n\nasdf\n\nasdf\n\nasdf\n')
+    const starts: number[] = []
+    e.state.doc.descendants((n, pos) => {
+      if (n.isTextblock && n.textContent === 'asdf') starts.push(pos + 1)
+      return true
+    })
+    const anchor = anchorForSelection(e.state.doc, starts[2], 'asdf')!
+    e.commands.insertContentAt(1, 'A much longer intro paragraph that shifts every offset. ')
+    const after: number[] = []
+    e.state.doc.descendants((n, pos) => {
+      if (n.isTextblock && n.textContent === 'asdf') after.push(pos + 1)
+      return true
+    })
+    expect(resolveAnchor(e.state.doc, anchor)!.from).toBe(after[2])
     e.destroy()
   })
 

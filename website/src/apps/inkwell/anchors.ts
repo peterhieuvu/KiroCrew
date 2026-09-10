@@ -103,7 +103,10 @@ function findAll(haystack: string, needle: string): number[] {
   return out
 }
 
-/** Score a candidate hit by how much of the prefix/suffix context matches. */
+/** Score a candidate hit by how much of the prefix/suffix context matches.
+ *  Context is whitespace-COLLAPSED but not trimmed: the boundary space between
+ *  prefix and quote is load-bearing (a trimmed "…asdf" never matches the
+ *  index's "…asdf ", which zeroed every score for repeated lines). */
 function contextScore(
   text: string,
   hit: number,
@@ -113,7 +116,7 @@ function contextScore(
 ): number {
   let score = 0
   if (prefix) {
-    const p = normalizeQuote(prefix)
+    const p = prefix.replace(/\s+/g, ' ')
     const before = text.slice(Math.max(0, hit - p.length), hit)
     // Count the matched tail of the prefix.
     for (let k = 1; k <= Math.min(p.length, before.length); k++) {
@@ -122,7 +125,7 @@ function contextScore(
     }
   }
   if (suffix) {
-    const s = normalizeQuote(suffix)
+    const s = suffix.replace(/\s+/g, ' ')
     const after = text.slice(hit + quoteLen, hit + quoteLen + s.length)
     for (let k = 1; k <= Math.min(s.length, after.length); k++) {
       if (s.slice(0, k) === after.slice(0, k)) score += k
@@ -131,6 +134,43 @@ function contextScore(
   }
   return score
 }
+
+/** Build a FULL anchor for a selection starting at `from`: quote plus the context the
+ *  resolver needs to pick the right occurrence when the same text appears
+ *  more than once (four consecutive "asdf" lines — live finding 2026-09-10:
+ *  a quote-only anchor on the last line resolved to the first).
+ *
+ *  Context is computed on the SAME searchable string the resolver indexes,
+ *  so prefix/suffix/offsets compare apples to apples. `quote` may be a
+ *  truncated version of the selection (MAX_QUOTE_LEN); offsets and suffix
+ *  follow the quote actually stored, not the raw selection. Returns null when
+ *  the quote cannot be located at the selection (empty / whitespace-only). */
+export function anchorForSelection(doc: PMNode, from: number, quote: string): CommentAnchor | null {
+  const q = normalizeQuote(quote)
+  if (!q) return null
+  const { text, positions } = buildTextIndex(doc)
+  const hits = findAll(text, q)
+  if (hits.length === 0) return null
+  // The occurrence that starts at (or nearest to) the selection start.
+  let hit = hits[0]
+  let best = Infinity
+  for (const h of hits) {
+    const d = Math.abs(positions[h] - from)
+    if (d < best) { best = d; hit = h }
+  }
+  const end = hit + q.length
+  return {
+    quote: q,
+    prefix: text.slice(Math.max(0, hit - ANCHOR_CONTEXT_CHARS), hit) || null,
+    suffix: text.slice(end, end + ANCHOR_CONTEXT_CHARS) || null,
+    start_offset: hit,
+    end_offset: end,
+  }
+}
+
+/** Characters of prefix/suffix context stored with an anchor. Enough to span
+ *  a few short repeated lines ("asdf asdf asdf ") and still disambiguate. */
+export const ANCHOR_CONTEXT_CHARS = 48
 
 /** Resolve one anchor against a doc. Returns null when orphaned. */
 export function resolveAnchor(doc: PMNode, anchor: CommentAnchor): ResolvedAnchor | null {
@@ -146,10 +186,14 @@ export function resolveAnchor(doc: PMNode, anchor: CommentAnchor): ResolvedAncho
     hit = hits[0]
   } else {
     // Disambiguate: best context score, then nearest to the recorded offset.
-    const ref = anchor.start_offset ?? 0
+    // Without a recorded offset there is no positional preference — the
+    // earliest occurrence wins only as the final, stable tiebreak (never a
+    // bias toward the top of the document).
+    const ref = anchor.start_offset
+    const dist = (h: number) => (ref == null ? 0 : Math.abs(h - ref))
     hit = hits
       .map(h => ({ h, score: contextScore(text, h, quote.length, anchor.prefix, anchor.suffix) }))
-      .sort((a, b) => b.score - a.score || Math.abs(a.h - ref) - Math.abs(b.h - ref))[0].h
+      .sort((a, b) => b.score - a.score || dist(a.h) - dist(b.h) || a.h - b.h)[0].h
   }
 
   const from = positions[hit]

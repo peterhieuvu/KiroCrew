@@ -34,7 +34,7 @@ import RichMarkdownEditor, { type RichMarkdownEditorHandle } from './RichMarkdow
 import CoAuthorPanel from './CoAuthorPanel'
 import { companionContextLines } from './companionPrompt'
 import { saveDoc, StaleDocError, INKWELL_TAG, type InkwellDoc } from './api'
-import type { CommentThread } from './anchors'
+import type { CommentAnchor, CommentThread } from './anchors'
 import { parseSuggestion } from './suggestions'
 import { threeWayMerge } from './merge'
 import ContextRail from './ContextRail'
@@ -432,24 +432,24 @@ export default function InkwellPage() {
   // The comment is the durable record (thread, REVIEW/resolve lifecycle,
   // server-side orphan rescan on every content write); the chat turn is the
   // doorbell that makes the co-author act on it now.
-  const [commentQuote, setCommentQuote] = useState<string | null>(null)
+  const [commentAnchor, setCommentAnchor] = useState<CommentAnchor | null>(null)
   const [commentAt, setCommentAt] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [commentNote, setCommentNote] = useState('')
   const [commentSending, setCommentSending] = useState(false)
 
   const sendComment = useCallback(async () => {
-    if (!doc || !commentQuote || !commentNote.trim() || commentSending) return
+    if (!doc || !commentAnchor || !commentNote.trim() || commentSending) return
     setCommentSending(true)
     try {
       // Durability first: the comment lands on the artifact immediately.
       await api.postArtifactComment(doc.slug, {
         text: commentNote.trim(),
-        anchor: { quote: commentQuote },
+        anchor: commentAnchor,
       })
       // The nudge is coalesced (see scheduleNudge): N quick comments → one
       // turn; comments posted mid-turn → one catch-up nudge at busy→idle.
       scheduleNudge()
-      setCommentQuote(null)
+      setCommentAnchor(null)
       setCommentNote('')
       setChatOpen(true)
       void fetchThreads(doc.slug)
@@ -458,7 +458,7 @@ export default function InkwellPage() {
     } finally {
       setCommentSending(false)
     }
-  }, [doc, commentQuote, commentNote, commentSending, scheduleNudge, fetchThreads])
+  }, [doc, commentAnchor, commentNote, commentSending, scheduleNudge, fetchThreads])
 
   const replyToThread = useCallback(async (root: CommentThread, text: string) => {
     if (!doc) return
@@ -683,8 +683,8 @@ export default function InkwellPage() {
               ref={editorRef}
               value={buffer}
               onChange={onEdit}
-              onComment={(quote, at) => {
-                setCommentQuote(quote)
+              onComment={(anchor, at) => {
+                setCommentAnchor(anchor)
                 setCommentAt(at)
                 setCommentNote('')
                 setFocusThread(null) // one popover at a time
@@ -699,7 +699,7 @@ export default function InkwellPage() {
               Open a document to start writing.
             </div>
           )}
-          {focusedRoot && !commentQuote && (
+          {focusedRoot && !commentAnchor && (
             <ThreadPopover
               key={focusedRoot.id}
               root={focusedRoot}
@@ -717,7 +717,7 @@ export default function InkwellPage() {
           )}
           {/* Comment composer — at the selection, where the pill was, not at
               the bottom of the editor. Escape or Cancel dismisses; Enter sends. */}
-          {commentQuote && (
+          {commentAnchor && (
             <div
               role="dialog"
               aria-label="New comment"
@@ -725,17 +725,16 @@ export default function InkwellPage() {
               className="absolute z-20 w-[340px] rounded-lg border border-border bg-bg-elevated shadow-lg p-2.5 flex flex-col gap-1.5 text-[12px]"
               style={{ left: Math.max(0, commentAt.x - 20), top: commentAt.y + 4 }}
             >
-              <div className="text-muted truncate italic" title={commentQuote}>
-                “{commentQuote.length > 120 ? `${commentQuote.slice(0, 120)}…` : commentQuote}”
+              <div className="text-muted truncate italic" title={commentAnchor.quote}>
+                “{commentAnchor.quote.length > 120 ? `${commentAnchor.quote.slice(0, 120)}…` : commentAnchor.quote}”
               </div>
               <input
                 value={commentNote}
                 onChange={e => setCommentNote(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') void sendComment()
-                  if (e.key === 'Escape') setCommentQuote(null)
+                  if (e.key === 'Escape') setCommentAnchor(null)
                 }}
-                // eslint-disable-next-line jsx-a11y/no-autofocus -- opens from an
                 // explicit pill click; focus continues that gesture.
                 autoFocus
                 aria-label="Comment for the co-author"
@@ -745,7 +744,7 @@ export default function InkwellPage() {
               <div className="flex items-center justify-end gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setCommentQuote(null)}
+                  onClick={() => setCommentAnchor(null)}
                   className="rounded-md px-2 py-1 text-[12px] text-muted hover:text-text cursor-pointer bg-transparent border-none transition-colors"
                 >
                   Cancel
