@@ -45,12 +45,23 @@ All under `website/src/apps/inkwell/`:
   backing path, one pane). **Threads live at the passage**: a highlight
   click, a gutter marker, or the caret entering a range opens
   `ThreadPopover` beside the text; only orphaned threads (no live range)
-  fall back to a list.
+  fall back to a list. **Comments are created at the passage too**: the
+  Comment pill opens the composer as a popover at the selection (not a strip
+  at the editor foot). One popover at a time: a RANGE selection anywhere
+  closes an open thread popover (so the pill is never occluded and a fresh
+  comment can be started inside an existing highlight), while a CARET inside
+  a highlight opens its thread.
+- **Show-resolved toggle**: resolved root threads are hidden by default; a
+  header pill (`N resolved`) reveals them — decorated in a muted dashed
+  style with hollow gutter dots — and their popover offers **Reopen**
+  (`/reopen` endpoint). The open-count badge counts open threads only.
+  `resolveThreads` does NOT filter by status; the page decides what to
+  decorate.
 - `ThreadPopover.tsx` — the anchored thread view: root, every reply with
   agent attribution and suggestion fences rendered as a preview block,
   status/orphan badges, Reply, and the human actions (Accept/Reject on a
-  proposal, Resolve otherwise). Closes on Escape, click-outside, or the
-  caret leaving the range.
+  proposal, Resolve otherwise, Reopen when resolved). Closes on Escape,
+  click-outside, or the caret leaving the range.
 - `NewDocPopover.tsx` — replaces two native prompts with one pane.
 - **Nudge coalescing**: comments post immediately (durability), but the
   agent nudge is a trailing 1.5 s debounce and is suppressed entirely while
@@ -66,6 +77,13 @@ All under `website/src/apps/inkwell/`:
   quote search with prefix/suffix disambiguation, orphan on miss. The text
   index mirrors quote construction (inline mark boundaries concatenate,
   block boundaries contribute one space, whitespace collapses).
+  **Creation is symmetric**: `anchorForSelection` builds the FULL anchor
+  (quote + 48 chars of prefix/suffix + offsets) on that same index, so a
+  comment on the last of four identical lines resolves to the last line.
+  Context scoring collapses whitespace but does not trim — the boundary
+  space between prefix and quote is load-bearing. With no recorded offset
+  the earliest hit is only the final stable tiebreak, never a bias toward
+  the top of the document (legacy quote-only anchors keep their behaviour).
 - `commentHighlights.ts` — ProseMirror decoration plugin: rebuilt when the
   page pushes freshly-resolved threads, mapped natively through user typing
   between pushes; clicks surface the thread id.
@@ -121,7 +139,11 @@ still resolvable in the editor. The orphan badge (popover and fallback list) sho
 
 - `website/src/test/inkwellAnchors.test.ts` — anchor resolution and the
   markdown round-trip idempotency corpus, against a real headless Tiptap
-  editor with the app's extension set.
+  editor with the app's extension set; includes the repeated-lines
+  regression (comment on the 4th of four identical lines stays there, and
+  survives an edit above it).
 - `website/src/test/InkwellPage.test.tsx` — autosave debounce, failure and
-  conflict paths, thread popover, orphan fallback list, resolve wiring, nudge coalescing, comment-composer flow.
+  conflict paths, thread popover, orphan fallback list, resolve/reopen
+  wiring, Show-resolved toggle, caret-opens/selection-closes rule, nudge
+  coalescing, comment-composer flow.
 - `website/src/test/inkwellApi.test.ts` — `saveDoc` token/409 contract.
