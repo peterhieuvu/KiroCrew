@@ -47,20 +47,27 @@ const applySuggestionMock = vi.hoisted(() => vi.fn().mockReturnValue(true))
 vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
   const React = await import('react')
   return {
-    default: React.forwardRef(function Stub({ value, onChange, onComment, commentThreads, onThreadsResolved }: {
+    default: React.forwardRef(function Stub({ value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick }: {
       value: string
       onChange: (md: string) => void
       onComment?: (q: string) => void
       commentThreads?: { id: string }[]
       onThreadsResolved?: (ids: string[]) => void
+      onThreadClick?: (id: string) => void
     }, ref: React.Ref<unknown>) {
-      React.useImperativeHandle(ref, () => ({ applySuggestion: applySuggestionMock }))
+      React.useImperativeHandle(ref, () => ({
+        applySuggestion: applySuggestionMock,
+        threadAnchorRect: () => ({ x: 10, y: 20, top: 15 }),
+      }))
       return (
         <div data-testid="editor-stub">
           <span data-testid="editor-value">{value}</span>
           <button type="button" onClick={() => onChange(value.replace('omega', 'omega user-edit'))}>stub-type</button>
           <button type="button" onClick={() => onComment?.('a quoted passage')}>stub-select</button>
           <button type="button" onClick={() => onThreadsResolved?.(['t2'])}>stub-orphan-t2</button>
+          {commentThreads?.map(t => (
+            <button key={t.id} type="button" onClick={() => onThreadClick?.(t.id)}>{`stub-open-${t.id}`}</button>
+          ))}
           <span data-testid="thread-count">{commentThreads?.length ?? 0}</span>
         </div>
       )
@@ -164,25 +171,38 @@ describe('threads strip', () => {
     { id: 't4', body: 'a reply', status: 'open', parent_id: 't1', anchor: null },
   ]
 
-  it('renders root unresolved threads with status chips; resolve is wired', async () => {
+  it('passes root unresolved threads to the editor; anchored ones are NOT listed in a strip', async () => {
     apiMock.artifactComments.mockResolvedValue({ comments: THREADS })
     await openDoc()
-    expect(screen.getByText('tighten this')).toBeInTheDocument()
-    expect(screen.getByText('source?')).toBeInTheDocument()
-    expect(screen.queryByText('done already')).not.toBeInTheDocument() // resolved
-    expect(screen.queryByText('a reply')).not.toBeInTheDocument() // reply rides parent
+    // Editor receives exactly the root unresolved threads (t1, t2).
     expect(screen.getByTestId('thread-count').textContent).toBe('2')
+    expect(screen.getByTestId('inkwell-thread-count').textContent).toBe('2 threads')
+    // No bottom strip for anchored threads; bodies appear only via the popover.
+    expect(screen.queryByText('tighten this')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('inkwell-orphaned-threads')).not.toBeInTheDocument()
+  })
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Resolve' })[0])
+  it('opening a thread shows its popover with the root, replies, and Resolve', async () => {
+    apiMock.artifactComments.mockResolvedValue({ comments: THREADS })
+    await openDoc()
+    fireEvent.click(screen.getByText('stub-open-t1'))
+    const pop = await screen.findByTestId('inkwell-thread-popover')
+    expect(pop).toHaveTextContent('tighten this')
+    expect(pop).toHaveTextContent('a reply') // reply rendered in-thread
+    expect(pop).not.toHaveTextContent('done already')
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve' }))
     await waitFor(() => expect(apiMock.resolveComment).toHaveBeenCalledWith('notes', 't1'))
   })
 
-  it('shows the orphan badge from the editor’s local resolution verdict', async () => {
+  it('orphaned threads fall back to a list; the badge follows the editor’s verdict', async () => {
     apiMock.artifactComments.mockResolvedValue({ comments: THREADS })
     await openDoc()
-    expect(screen.queryByText('orphaned')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('inkwell-orphaned-threads')).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('stub-orphan-t2'))
-    expect(screen.getByText('orphaned')).toBeInTheDocument()
+    const list = screen.getByTestId('inkwell-orphaned-threads')
+    expect(list).toHaveTextContent('source?')
+    expect(list).toHaveTextContent('orphaned')
+    expect(list).not.toHaveTextContent('tighten this') // anchored ones stay out
   })
 })
 
@@ -196,7 +216,7 @@ describe('proposed edits (phase 3)', () => {
     },
     {
       id: 'p2', body: 'Here you go:\n```suggestion\ntightened text\n```',
-      status: 'review', parent_id: 'p1', anchor: null,
+      status: 'review', parent_id: 'p1', anchor: null, is_agent: true,
     },
     { id: 'n1', body: 'plain question, no proposal', status: 'open', anchor: { quote: 'q' } },
   ]
@@ -208,16 +228,24 @@ describe('proposed edits (phase 3)', () => {
     applySuggestionMock.mockClear().mockReturnValue(true)
   })
 
-  it('threads with a suggestion show Accept/Reject; plain threads keep Resolve', async () => {
+  it('a proposal thread’s popover shows the suggestion preview + Accept/Reject; a plain thread shows Resolve', async () => {
     await openDoc()
+    fireEvent.click(screen.getByText('stub-open-p1'))
+    const pop = await screen.findByTestId('inkwell-thread-popover')
+    expect(pop).toHaveTextContent('🤖 co-author') // agent reply attributed
+    expect(screen.getByTestId('inkwell-suggestion-preview')).toHaveTextContent('tightened text')
     expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Resolve' })).toHaveLength(1) // n1 only
+    expect(screen.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('stub-open-n1'))
+    expect(await screen.findByRole('button', { name: 'Resolve' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
   })
 
   it('Accept applies at the ROOT anchor, replies, resolves, refetches', async () => {
     await openDoc()
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    fireEvent.click(screen.getByText('stub-open-p1'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept' }))
     await act(async () => { await vi.runOnlyPendingTimersAsync() })
     expect(applySuggestionMock).toHaveBeenCalledWith(
       { quote: 'the anchored passage' }, 'tightened text',
@@ -229,7 +257,8 @@ describe('proposed edits (phase 3)', () => {
   it('Accept on an orphaned anchor surfaces the error and leaves the thread open', async () => {
     applySuggestionMock.mockReturnValue(false)
     await openDoc()
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    fireEvent.click(screen.getByText('stub-open-p1'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept' }))
     await act(async () => { await vi.runOnlyPendingTimersAsync() })
     expect(screen.getByText(/Could not apply/)).toBeInTheDocument()
     expect(apiMock.resolveComment).not.toHaveBeenCalled()
@@ -237,11 +266,59 @@ describe('proposed edits (phase 3)', () => {
 
   it('Reject replies and resolves without touching the editor', async () => {
     await openDoc()
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    fireEvent.click(screen.getByText('stub-open-p1'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Reject' }))
     await act(async () => { await vi.runOnlyPendingTimersAsync() })
     expect(applySuggestionMock).not.toHaveBeenCalled()
     expect(apiMockExt.replyArtifactComment).toHaveBeenCalledWith('notes', 'p1', { text: 'Declined the suggestion.' })
     expect(apiMock.resolveComment).toHaveBeenCalledWith('notes', 'p1')
+  })
+})
+
+describe('new-document popover', () => {
+  it('one pane collects name + optional path and creates on Enter', async () => {
+    apiMock.createArtifact.mockResolvedValue({ slug: 'fresh' })
+    apiMock.artifact.mockResolvedValue({ ...DOC, slug: 'fresh', name: 'fresh' })
+    renderWithProviders(<InkwellPage />)
+    await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    fireEvent.click(screen.getByRole('button', { name: 'New document' }))
+    const pane = screen.getByTestId('inkwell-new-doc')
+    fireEvent.change(screen.getByLabelText('Document name'), { target: { value: 'fresh' } })
+    fireEvent.change(screen.getByLabelText('Backing file path'), { target: { value: '/repo/docs/fresh.md' } })
+    fireEvent.keyDown(screen.getByLabelText('Backing file path'), { key: 'Enter' })
+    await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    expect(apiMock.createArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'fresh', kind: 'markdown', source_path: '/repo/docs/fresh.md',
+    }))
+    expect(pane).not.toBeInTheDocument() // closed after create
+  })
+})
+
+describe('nudge coalescing', () => {
+  async function postComment() {
+    fireEvent.click(screen.getByText('stub-select'))
+    const input = screen.getByLabelText('Comment for the co-author')
+    fireEvent.change(input, { target: { value: 'note' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Comment & notify' }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(50) })
+  }
+
+  beforeEach(() => {
+    apiMock.postArtifactComment.mockResolvedValue({})
+    apiMock.createChatSlot.mockResolvedValue({ key: 'chat-9', title: 'Inkwell: notes' })
+    apiMock.chatSlotContext.mockResolvedValue({})
+    apiMock.sendChat.mockResolvedValue({ ok: true })
+  })
+
+  it('three quick comments post three times but nudge exactly once', async () => {
+    await openDoc()
+    await postComment()
+    await postComment()
+    await postComment()
+    expect(apiMock.postArtifactComment).toHaveBeenCalledTimes(3)
+    expect(apiMock.sendChat).not.toHaveBeenCalled() // inside the debounce
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600) })
+    expect(apiMock.sendChat).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -295,6 +372,7 @@ describe('comment composer', () => {
       text: 'find a source',
       anchor: { quote: 'a quoted passage' },
     })
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600) }) // nudge debounce
     expect(apiMock.sendChat).toHaveBeenCalled()
     expect(apiMock.artifactComments.mock.calls.length).toBeGreaterThanOrEqual(2)
   })

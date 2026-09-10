@@ -40,9 +40,24 @@ All under `website/src/apps/inkwell/`:
   autosave loop (debounced `saveDoc`, md-notebook's flush discipline:
   unmount-flush only when dirty, dirty-stays-on-failure), the conflict banner
   (a stale-token 409 keeps the stale token so retries fail loudly), the
-  threads strip (status chips, orphan badge, human-only Resolve), and the
-  comment composer (posts an anchored comment, then a nudge turn into the
-  bound session).
+  comment composer (posts an anchored comment, then a coalesced nudge into
+  the bound session), and the document-creation popover (name + optional
+  backing path, one pane). **Threads live at the passage**: a highlight
+  click, a gutter marker, or the caret entering a range opens
+  `ThreadPopover` beside the text; only orphaned threads (no live range)
+  fall back to a list.
+- `ThreadPopover.tsx` — the anchored thread view: root, every reply with
+  agent attribution and suggestion fences rendered as a preview block,
+  status/orphan badges, Reply, and the human actions (Accept/Reject on a
+  proposal, Resolve otherwise). Closes on Escape, click-outside, or the
+  caret leaving the range.
+- `NewDocPopover.tsx` — replaces two native prompts with one pane.
+- **Nudge coalescing**: comments post immediately (durability), but the
+  agent nudge is a trailing 1.5 s debounce and is suppressed entirely while
+  the bound session is busy; the busy→idle reload fires one catch-up nudge
+  if anything was posted mid-turn. Rationale: a send into a running slot is
+  QUEUED by the server as a whole extra turn, so N quick comments would cost
+  N turns with the later ones finding nothing open.
 - `RichMarkdownEditor.tsx` — Tiptap (open core, exact pins) WYSIWYG with
   markdown IO. External changes arrive via `setContent(..., emitUpdate:
   false)` so they never dirty the buffer; `setEditable(..., false)` for the
@@ -59,7 +74,7 @@ All under `website/src/apps/inkwell/`:
   Accept re-resolves the root anchor at click time and splices the
   replacement as an ordinary edit (single-line = plain text, multi-line =
   markdown blocks), then replies and resolves; Reject replies and resolves.
-  Accept/reject sit on the human-only resolve path by construction.
+  Accept/reject sit on the human-only resolve path by construction (surfaced in the thread popover).
 - `ContextRail.tsx` — the synchronous context rail (phase 5): "what did we
   decide about X" answered with no agent turn. Derives a query from the
   document (selection, else H1 + the heading nearest the caret), then reads
@@ -100,7 +115,7 @@ Known limit: the server's comment-anchor rescan
 (`_rescan_comment_anchors_locked` in `src/kiro_crew/artifacts.py`) checks
 quotes against markdown source, while the editor resolves against rendered
 text — a quote spanning inline formatting can be orphaned server-side yet
-still resolvable in the editor. The strip shows the union of both verdicts.
+still resolvable in the editor. The orphan badge (popover and fallback list) shows the union of both verdicts.
 
 ## Tests
 
@@ -108,5 +123,5 @@ still resolvable in the editor. The strip shows the union of both verdicts.
   markdown round-trip idempotency corpus, against a real headless Tiptap
   editor with the app's extension set.
 - `website/src/test/InkwellPage.test.tsx` — autosave debounce, failure and
-  conflict paths, threads strip, resolve wiring, comment-composer flow.
+  conflict paths, thread popover, orphan fallback list, resolve wiring, nudge coalescing, comment-composer flow.
 - `website/src/test/inkwellApi.test.ts` — `saveDoc` token/409 contract.

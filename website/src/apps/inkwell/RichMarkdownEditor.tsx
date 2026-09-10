@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import { IconButton } from '../../components/ui'
 import { resolveThreads, snapToWordBounds, type CommentThread, type CommentAnchor } from './anchors'
-import { CommentHighlights, commentHighlightsKey } from './commentHighlights'
+import { CommentHighlights, commentHighlightsKey, liveThreadRanges, threadAtPos } from './commentHighlights'
 import { applySuggestion } from './suggestions'
 import './richEditor.css'
 
@@ -54,19 +54,23 @@ interface Props {
   onThreadsResolved?: (orphanedIds: string[]) => void
   /** A decorated range was clicked. */
   onThreadClick?: (threadId: string) => void
-  /** Caret context for the context rail: the 0-based markdown source line
-   *  nearest the caret (approximated by block index — headings map 1:1 to
-   *  their source lines in a blank-line-separated doc) and the current
-   *  selection text, or null. Fires on selection changes only. */
-  onCaretContext?: (ctx: { blockIndex: number; selection: string | null }) => void
+  /** Caret context for the context rail AND thread popover: the caret's
+   *  top-level block index, the current selection text (or null), and the
+   *  id of the comment thread whose live range contains the caret (or null
+   *  — the popover closes when the caret leaves a highlight). */
+  onCaretContext?: (ctx: { blockIndex: number; selection: string | null; threadId: string | null }) => void
   disabled?: boolean
 }
 
-/** Imperative surface for the host page (proposal accept path). */
+/** Imperative surface for the host page. */
 export interface RichMarkdownEditorHandle {
   /** Re-resolve `anchor` NOW and splice `replacement` in as a normal edit
    *  (flows through onChange → autosave). False = anchor orphaned. */
   applySuggestion: (anchor: CommentAnchor, replacement: string) => boolean
+  /** Wrapper-relative coordinates of a thread's LIVE decorated range (end of
+   *  the range, for a popover beside the passage), or null when the thread
+   *  is not currently decorated (orphaned / resolved). */
+  threadAnchorRect: (threadId: string) => { x: number; y: number; top: number } | null
 }
 
 /** Minimum selection length for the comment pill (mirrors spec_builder). */
@@ -133,7 +137,9 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
       const $from = editor.state.doc.resolve(from)
       const blockIndex = $from.index(0)
       const selection = from === to ? null : editor.state.doc.textBetween(from, to, ' ')
-      fn({ blockIndex, selection })
+      // Caret inside a highlight → that thread; the page opens its popover.
+      const threadId = from === to ? threadAtPos(editor.state, from) : null
+      fn({ blockIndex, selection, threadId })
     }
     editor.on('selectionUpdate', handler)
     return () => { editor.off('selectionUpdate', handler) }
@@ -157,9 +163,19 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   // Imperative accept path: resolve-at-click and splice. Kept on a handle
   // (not props) because it is a command, not state — the page fires it from
   // the thread strip's Accept button.
+  const wrapRef = useRef<HTMLDivElement>(null)
   useImperativeHandle(ref, () => ({
     applySuggestion: (anchor: CommentAnchor, replacement: string) =>
       editor ? applySuggestion(editor, anchor, replacement) : false,
+    threadAnchorRect: (threadId: string) => {
+      if (!editor || !wrapRef.current) return null
+      const range = liveThreadRanges(editor.state).find(r => r.id === threadId)
+      if (!range) return null
+      const host = wrapRef.current.getBoundingClientRect()
+      const end = editor.view.coordsAtPos(range.to)
+      const start = editor.view.coordsAtPos(range.from)
+      return { x: end.right - host.left, y: end.bottom - host.top, top: start.top - host.top }
+    },
   }), [editor])
 
   // --- comment thread resolution → decorations -----------------------------
@@ -181,7 +197,6 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   // Settled on mouseup/keyup rather than every transaction so the pill does
   // not flicker mid-drag. Position comes from the editor's own coordsAtPos —
   // relative to the outer wrapper, like DocView's rect math.
-  const wrapRef = useRef<HTMLDivElement>(null)
   const [commentSel, setCommentSel] = useState<{ quote: string; x: number; y: number } | null>(null)
   const settleSelection = () => {
     if (!onComment || !editor) return
@@ -206,6 +221,20 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   }
 
   if (!editor) return null
+
+  // Gutter marker positions, derived each render from live decorations.
+  // Wrapper-relative; the wrapper is the positioned ancestor. Computed inline
+  // (not memoized) because every transaction re-renders via forceRender and
+  // coordsAtPos is cheap for a handful of threads.
+  const gutterMarkers = (() => {
+    const host = wrapRef.current?.getBoundingClientRect()
+    if (!host) return [] as Array<{ id: string; status: string; top: number }>
+    return liveThreadRanges(editor.state).map(r => ({
+      id: r.id,
+      status: r.status,
+      top: editor.view.coordsAtPos(r.from).top - host.top,
+    }))
+  })()
 
   const setLink = () => {
     const prev = editor.getAttributes('link').href as string | undefined
@@ -254,6 +283,25 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
       >
         <EditorContent editor={editor} className="h-full" />
       </div>
+      {/* Gutter markers: one per live thread range, at the range's first line.
+          Read from the DecorationSet so they follow the text through edits.
+          Rendered on every transaction (forceRender) so positions stay true. */}
+      {onThreadClick && gutterMarkers.map(m => (
+        <button
+          key={m.id}
+          type="button"
+          data-testid="inkwell-gutter-marker"
+          aria-label={`Open comment thread (${m.status})`}
+          title="Open comment thread"
+          onClick={() => onThreadClick(m.id)}
+          className={`absolute right-1 h-3 w-3 rounded-full border cursor-pointer p-0 transition-colors ${
+            m.status === 'review'
+              ? 'bg-success/30 border-success/60 hover:bg-success/60'
+              : 'bg-accent/30 border-accent/60 hover:bg-accent/60'
+          }`}
+          style={{ top: m.top + 4 }}
+        />
+      ))}
       {commentSel && (
         <button
           type="button"

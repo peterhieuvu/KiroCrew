@@ -15,7 +15,7 @@
  * Own pluginKey: ProseMirror plugins collide without distinct keys.
  */
 import { Extension } from '@tiptap/core'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { ThreadHighlight } from './anchors'
 
@@ -29,11 +29,38 @@ function buildDecorations(highlights: ThreadHighlight[], docSize: number): Decor
   return highlights
     .filter(h => h.from >= 0 && h.to > h.from && h.to <= docSize)
     .map(h =>
-      Decoration.inline(h.from, h.to, {
-        class: `inkwell-comment-hl inkwell-comment-hl--${h.status}`,
-        'data-thread-id': h.id,
-      }),
+      Decoration.inline(
+        h.from,
+        h.to,
+        {
+          class: `inkwell-comment-hl inkwell-comment-hl--${h.status}`,
+          'data-thread-id': h.id,
+        },
+        // spec: readable back off DecorationSet.find() results — attrs are
+        // not — so the gutter markers and caret detection can identify the
+        // thread at a LIVE (mapped) position without a DOM round-trip.
+        { threadId: h.id, status: h.status },
+      ),
     )
+}
+
+/** Live (transaction-mapped) thread ranges currently decorated. */
+export function liveThreadRanges(state: EditorState): Array<{ id: string; status: string; from: number; to: number }> {
+  const set = commentHighlightsKey.getState(state)
+  if (!set) return []
+  return set.find().map(d => ({
+    id: String((d.spec as { threadId?: string }).threadId ?? ''),
+    status: String((d.spec as { status?: string }).status ?? 'open'),
+    from: d.from,
+    to: d.to,
+  })).filter(r => r.id)
+}
+
+/** Thread id whose live range contains `pos`, or null. */
+export function threadAtPos(state: EditorState, pos: number): string | null {
+  const set = commentHighlightsKey.getState(state)
+  const hit = set?.find(pos, pos)[0]
+  return hit ? String((hit.spec as { threadId?: string }).threadId ?? '') || null : null
 }
 
 export const CommentHighlights = Extension.create<CommentHighlightsOptions>({
@@ -64,19 +91,11 @@ export const CommentHighlights = Extension.create<CommentHighlightsOptions>({
           },
           handleClick(view, pos) {
             if (!opts.onThreadClick) return false
-            const set = commentHighlightsKey.getState(view.state)
-            if (!set) return false
-            const hit = set.find(pos, pos)[0] as (Decoration & { spec?: unknown }) | undefined
-            // Decoration attrs are not exposed on find() results; read the
-            // thread id off the DOM element under the click instead.
-            const dom = view.domAtPos(pos).node
-            const el = (dom.nodeType === 1 ? (dom as Element) : dom.parentElement)
-              ?.closest?.('[data-thread-id]')
-            const id = el?.getAttribute('data-thread-id')
-            if (hit && id) {
-              opts.onThreadClick(id)
-              return true
-            }
+            const id = threadAtPos(view.state, pos)
+            if (!id) return false
+            opts.onThreadClick(id)
+            // Do NOT swallow the click: the caret should still land where the
+            // user clicked so the popover tracks a real position.
             return false
           },
         },

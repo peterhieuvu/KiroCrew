@@ -38,6 +38,8 @@ import type { CommentThread } from './anchors'
 import { parseSuggestion } from './suggestions'
 import { threeWayMerge } from './merge'
 import ContextRail from './ContextRail'
+import ThreadPopover from './ThreadPopover'
+import NewDocPopover from './NewDocPopover'
 
 /** Map a top-level block index to its markdown source line. Blocks in the
  *  app's own serialization are separated by blank lines, so the Nth block
@@ -85,7 +87,7 @@ export default function InkwellPage() {
 
   // ── Context rail (phase 5) ────────────────────────────────────────────────
   const [railOpen, setRailOpen] = useState(false)
-  const [caretCtx, setCaretCtx] = useState<{ blockIndex: number; selection: string | null }>({ blockIndex: 0, selection: null })
+  const [caretCtx, setCaretCtx] = useState<{ blockIndex: number; selection: string | null; threadId: string | null }>({ blockIndex: 0, selection: null, threadId: null })
 
   // ── Comment threads ───────────────────────────────────────────────────────
   // Fetched with the doc, refetched when the co-author turn ends and after a
@@ -93,7 +95,16 @@ export default function InkwellPage() {
   // with the server's `anchor_orphaned` in the strip.
   const [threads, setThreads] = useState<CommentThread[]>([])
   const [orphanedLocal, setOrphanedLocal] = useState<string[]>([])
+  // The thread whose popover is open, anchored at its passage. Opens on a
+  // highlight click, a gutter marker click, or the caret entering a range;
+  // closes when the caret leaves, on Escape, or on click-outside.
   const [focusThread, setFocusThread] = useState<string | null>(null)
+  // Caret-follow: entering a highlight opens it; leaving closes it. Runs off
+  // the editor's caret context so a plain click into prose dismisses.
+  useEffect(() => {
+    if (caretCtx.threadId) setFocusThread(caretCtx.threadId)
+    else if (caretCtx.selection === null) setFocusThread(null)
+  }, [caretCtx])
 
   const fetchThreads = useCallback(async (slug: string) => {
     try {
@@ -148,12 +159,8 @@ export default function InkwellPage() {
     }
   }, [fetchThreads])
 
-  const createDoc = useCallback(async () => {
-    const name = window.prompt('Document name:')
-    if (!name) return
-    const sourcePath = window.prompt(
-      'File path to back it (optional — blank keeps it store-only):',
-    ) || undefined
+  const [newDocOpen, setNewDocOpen] = useState(false)
+  const createDoc = useCallback(async (name: string, sourcePath: string | undefined) => {
     try {
       const created = (await api.createArtifact({
         name,
@@ -162,6 +169,7 @@ export default function InkwellPage() {
         tags: [INKWELL_TAG],
         ...(sourcePath ? { source_path: sourcePath } : {}),
       })) as { slug: string }
+      setNewDocOpen(false)
       await refreshDocs()
       await openDoc(created.slug)
     } catch (e) {
@@ -309,6 +317,48 @@ export default function InkwellPage() {
 
   // ── busy→idle reload (papyrus's no-flush rule, on the artifact read) ──────
   const coAuthorBusy = useAppSelector(state => selectComposerBusy(state, slotKey))
+  const busyRef = useRef(coAuthorBusy)
+  busyRef.current = coAuthorBusy
+
+  // ── Nudge coalescer ───────────────────────────────────────────────────────
+  // Comments post immediately (durability); nudges are the doorbell and are
+  // cheap to over-ring but expensive when they land: a send into a running
+  // slot QUEUES a whole extra turn (the server fail-closes to the queue), so
+  // three quick comments would cost three turns, the last two finding
+  // nothing open. Rules: trailing debounce while idle; while the co-author is
+  // busy, just flag — the busy→idle effect fires ONE catch-up nudge.
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const nudgePendingRef = useRef(false)
+  const NUDGE_DEBOUNCE_MS = 1500
+  const fireNudge = useCallback(async () => {
+    nudgePendingRef.current = false
+    const key = slotKey ?? await startSession()
+    if (!key) return
+    const msg =
+      'New comment activity on the document we are co-authoring. '
+      + 'Read the open comment threads with artifact_get_comments and '
+      + 'address any you have not already handled: act on each, reply on the '
+      + 'thread, and advance it with artifact_mark_review.'
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10_000)
+    try {
+      const r = await api.sendChat(msg, key, undefined, controller.signal)
+      if (!r.ok) throw new Error(`Send failed (${r.status})`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      clearTimeout(timeout)
+    }
+  }, [slotKey, startSession])
+  const scheduleNudge = useCallback(() => {
+    nudgePendingRef.current = true
+    if (busyRef.current) return // the busy→idle effect will fire it
+    if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current)
+    nudgeTimerRef.current = setTimeout(() => {
+      nudgeTimerRef.current = null
+      if (nudgePendingRef.current && !busyRef.current) void fireNudge()
+    }, NUDGE_DEBOUNCE_MS)
+  }, [fireNudge])
   const prevBusyRef = useRef(false)
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
@@ -358,6 +408,8 @@ export default function InkwellPage() {
         }
         // The turn may have replied to / advanced threads: refresh them.
         void fetchThreads(doc.slug)
+        // Comments posted DURING the turn were held; one catch-up nudge now.
+        if (nudgePendingRef.current) scheduleNudge()
       } catch {
         // A refresh failure is not worth a banner: the next autosave recovers,
         // and surfacing it would blame the user for the agent's turn.
@@ -385,26 +437,14 @@ export default function InkwellPage() {
     if (!doc || !commentQuote || !commentNote.trim() || commentSending) return
     setCommentSending(true)
     try {
+      // Durability first: the comment lands on the artifact immediately.
       await api.postArtifactComment(doc.slug, {
         text: commentNote.trim(),
         anchor: { quote: commentQuote },
       })
-      const key = slotKey ?? await startSession()
-      if (key) {
-        const msg =
-          'A new comment was anchored on the document we are co-authoring. '
-          + 'Read the open comment threads with artifact_get_comments and '
-          + 'address them: act on each, reply on the thread, and advance it '
-          + 'with artifact_mark_review.'
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 10_000)
-        try {
-          const r = await api.sendChat(msg, key, undefined, controller.signal)
-          if (!r.ok) throw new Error(`Send failed (${r.status})`)
-        } finally {
-          clearTimeout(timeout)
-        }
-      }
+      // The nudge is coalesced (see scheduleNudge): N quick comments → one
+      // turn; comments posted mid-turn → one catch-up nudge at busy→idle.
+      scheduleNudge()
       setCommentQuote(null)
       setCommentNote('')
       setChatOpen(true)
@@ -414,7 +454,18 @@ export default function InkwellPage() {
     } finally {
       setCommentSending(false)
     }
-  }, [doc, commentQuote, commentNote, commentSending, slotKey, startSession, fetchThreads])
+  }, [doc, commentQuote, commentNote, commentSending, scheduleNudge, fetchThreads])
+
+  const replyToThread = useCallback(async (root: CommentThread, text: string) => {
+    if (!doc) return
+    try {
+      await api.replyArtifactComment(doc.slug, root.id, { text })
+      scheduleNudge()
+      void fetchThreads(doc.slug)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [doc, scheduleNudge, fetchThreads])
 
   const resolveThread = useCallback(async (id: string) => {
     if (!doc) return
@@ -435,6 +486,10 @@ export default function InkwellPage() {
   const isOrphaned = useCallback(
     (t: CommentThread) => !!t.anchor_orphaned || orphanedLocal.includes(t.id),
     [orphanedLocal],
+  )
+  const focusedRoot = useMemo(
+    () => (focusThread ? rootThreads.find(t => t.id === focusThread) ?? null : null),
+    [focusThread, rootThreads],
   )
 
   // ── Proposed edits (phase 3) ──────────────────────────────────────────────
@@ -487,19 +542,20 @@ export default function InkwellPage() {
   return (
     <div className="flex h-full min-h-0 overflow-hidden" data-testid="inkwell-page">
       {/* Document list */}
-      <aside className="w-52 shrink-0 border-r border-border bg-card flex flex-col min-h-0">
+      <aside className="relative w-52 shrink-0 border-r border-border bg-card flex flex-col min-h-0">
         <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border shrink-0">
           <PenLine className="lucide-inline text-accent" />
           <span className="flex-1 text-[13px] font-semibold text-text">Inkwell</span>
           <button
             type="button"
-            onClick={createDoc}
+            onClick={() => setNewDocOpen(o => !o)}
             title="New document"
             aria-label="New document"
             className="p-1 rounded text-muted hover:text-text hover:bg-bg-hover cursor-pointer bg-transparent border-none transition-colors"
           >
             <FilePlus2 className="lucide-inline" />
           </button>
+          {newDocOpen && <NewDocPopover onCreate={createDoc} onClose={() => setNewDocOpen(false)} />}
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {docs.length === 0 && (
@@ -527,6 +583,15 @@ export default function InkwellPage() {
             {doc ? doc.name : 'Select or create a document'}
             {dirty ? ' •' : saving ? ' ⋯' : ''}
           </span>
+          {doc && rootThreads.length > 0 && (
+            <span
+              className="text-[11px] rounded-full bg-accent/15 text-accent px-2 py-0.5"
+              title={`${rootThreads.length} open comment thread${rootThreads.length === 1 ? '' : 's'} — click a highlight or gutter dot to open one`}
+              data-testid="inkwell-thread-count"
+            >
+              {rootThreads.length} {rootThreads.length === 1 ? 'thread' : 'threads'}
+            </span>
+          )}
           {merged && !conflict && (
             <span className="text-[12px] text-success">
               Merged the co-author’s changes into your draft.
@@ -574,7 +639,7 @@ export default function InkwellPage() {
         {error && (
           <div className="px-3 py-1 text-[12px] text-danger border-b border-border shrink-0">{error}</div>
         )}
-        <div className="flex-1 min-h-0">
+        <div className="relative flex-1 min-h-0">
           {doc ? (
             <RichMarkdownEditor
               ref={editorRef}
@@ -594,64 +659,38 @@ export default function InkwellPage() {
               Open a document to start writing.
             </div>
           )}
+          {focusedRoot && (
+            <ThreadPopover
+              key={focusedRoot.id}
+              root={focusedRoot}
+              replies={threads.filter(t => t.parent_id === focusedRoot.id)}
+              suggestion={suggestionFor.get(focusedRoot.id)}
+              orphaned={isOrphaned(focusedRoot)}
+              anchor={editorRef.current?.threadAnchorRect(focusedRoot.id) ?? null}
+              onAccept={() => void acceptSuggestion(focusedRoot)}
+              onReject={() => void rejectSuggestion(focusedRoot)}
+              onResolve={() => void resolveThread(focusedRoot.id)}
+              onReply={text => replyToThread(focusedRoot, text)}
+              onClose={() => setFocusThread(null)}
+            />
+          )}
         </div>
-        {rootThreads.length > 0 && (
-          <div className="border-t border-border shrink-0 max-h-36 overflow-y-auto" data-testid="inkwell-threads">
-            {rootThreads.map(t => (
-              <div
+        {/* Orphaned threads have no passage to sit at — list them here so they
+            stay reachable; everything anchored lives in the popover instead. */}
+        {rootThreads.some(isOrphaned) && (
+          <div className="border-t border-border shrink-0 max-h-28 overflow-y-auto" data-testid="inkwell-orphaned-threads">
+            {rootThreads.filter(isOrphaned).map(t => (
+              <button
                 key={t.id}
-                className={`flex items-center gap-2 px-3 py-1.5 text-[12px] border-b border-border/50 last:border-b-0 ${
+                type="button"
+                onClick={() => setFocusThread(t.id)}
+                className={`w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] border-b border-border/50 last:border-b-0 cursor-pointer bg-transparent border-x-0 border-t-0 hover:bg-bg-hover ${
                   focusThread === t.id ? 'bg-bg-hover' : ''
                 }`}
               >
-                <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
-                    t.status === 'review' ? 'bg-success/15 text-success' : 'bg-accent/15 text-accent'
-                  }`}
-                >
-                  {t.status}
-                </span>
-                {isOrphaned(t) && (
-                  <span
-                    className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn"
-                    title="The anchored passage no longer exists in the document"
-                  >
-                    orphaned
-                  </span>
-                )}
-                <span className="flex-1 truncate text-text" title={t.body}>
-                  {t.is_agent ? '🤖 ' : ''}{t.body}
-                </span>
-                {suggestionFor.has(t.id) ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => void acceptSuggestion(t)}
-                      title="Apply the proposed replacement at the anchored passage and resolve the thread"
-                      className="shrink-0 rounded-md border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] text-success hover:bg-success/20 cursor-pointer transition-colors"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void rejectSuggestion(t)}
-                      title="Decline the proposal and resolve the thread"
-                      className="shrink-0 rounded-md border border-border bg-bg-elevated px-2 py-0.5 text-[11px] text-muted hover:text-text hover:bg-bg-hover cursor-pointer transition-colors"
-                    >
-                      Reject
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void resolveThread(t.id)}
-                    title="Resolve this thread (human-only — the co-author can only mark it for review)"
-                    className="shrink-0 rounded-md border border-border bg-bg-elevated px-2 py-0.5 text-[11px] text-text hover:bg-bg-hover cursor-pointer transition-colors"
-                  >
-                    Resolve
-                  </button>
-                )}
-              </div>
+                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn" title="The anchored passage no longer exists in the document">orphaned</span>
+                <span className="flex-1 truncate text-text" title={t.body}>{t.is_agent ? '🤖 ' : ''}{t.body}</span>
+              </button>
             ))}
           </div>
         )}
