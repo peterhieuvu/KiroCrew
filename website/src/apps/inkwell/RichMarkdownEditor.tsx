@@ -45,7 +45,7 @@ interface Props {
    * it hands the selected text (whitespace-collapsed, capped) to the host so
    * it can attach an instruction and route it to the co-author.
    */
-  onComment?: (quote: string) => void
+  onComment?: (quote: string, at: { x: number; y: number }) => void
   /** Root comment threads to resolve and decorate. Replies and resolved
    *  threads are skipped by the resolver. */
   commentThreads?: CommentThread[]
@@ -314,7 +314,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
             e.preventDefault()
             const quote = commentSel.quote
             setCommentSel(null)
-            onComment?.(quote)
+            onComment?.(quote, { x: commentSel.x, y: commentSel.y })
           }}
         >
           <MessageSquarePlus size={13} /> Comment

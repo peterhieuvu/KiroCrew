@@ -430,6 +430,7 @@ export default function InkwellPage() {
   // server-side orphan rescan on every content write); the chat turn is the
   // doorbell that makes the co-author act on it now.
   const [commentQuote, setCommentQuote] = useState<string | null>(null)
+  const [commentAt, setCommentAt] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [commentNote, setCommentNote] = useState('')
   const [commentSending, setCommentSending] = useState(false)
 
@@ -645,9 +646,11 @@ export default function InkwellPage() {
               ref={editorRef}
               value={buffer}
               onChange={onEdit}
-              onComment={quote => {
+              onComment={(quote, at) => {
                 setCommentQuote(quote)
+                setCommentAt(at)
                 setCommentNote('')
+                setFocusThread(null) // one popover at a time
               }}
               commentThreads={rootThreads}
               onThreadsResolved={setOrphanedLocal}
@@ -659,7 +662,7 @@ export default function InkwellPage() {
               Open a document to start writing.
             </div>
           )}
-          {focusedRoot && (
+          {focusedRoot && !commentQuote && (
             <ThreadPopover
               key={focusedRoot.id}
               root={focusedRoot}
@@ -673,6 +676,52 @@ export default function InkwellPage() {
               onReply={text => replyToThread(focusedRoot, text)}
               onClose={() => setFocusThread(null)}
             />
+          )}
+          {/* Comment composer — at the selection, where the pill was, not at
+              the bottom of the editor. Escape or Cancel dismisses; Enter sends. */}
+          {commentQuote && (
+            <div
+              role="dialog"
+              aria-label="New comment"
+              data-testid="inkwell-comment-composer"
+              className="absolute z-20 w-[340px] rounded-lg border border-border bg-bg-elevated shadow-lg p-2.5 flex flex-col gap-1.5 text-[12px]"
+              style={{ left: Math.max(0, commentAt.x - 20), top: commentAt.y + 4 }}
+            >
+              <div className="text-muted truncate italic" title={commentQuote}>
+                “{commentQuote.length > 120 ? `${commentQuote.slice(0, 120)}…` : commentQuote}”
+              </div>
+              <input
+                value={commentNote}
+                onChange={e => setCommentNote(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') void sendComment()
+                  if (e.key === 'Escape') setCommentQuote(null)
+                }}
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- opens from an
+                // explicit pill click; focus continues that gesture.
+                autoFocus
+                aria-label="Comment for the co-author"
+                placeholder="Ask a question or request an edit…"
+                className="w-full rounded-md border border-border bg-bg px-2 py-1 text-[13px] text-text outline-none focus-ring"
+              />
+              <div className="flex items-center justify-end gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCommentQuote(null)}
+                  className="rounded-md px-2 py-1 text-[12px] text-muted hover:text-text cursor-pointer bg-transparent border-none transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void sendComment()}
+                  disabled={!commentNote.trim() || commentSending}
+                  className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1 text-[12px] text-accent hover:bg-accent/20 cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
+                >
+                  {commentSending ? 'Sending…' : 'Comment & notify'}
+                </button>
+              </div>
+            </div>
           )}
         </div>
         {/* Orphaned threads have no passage to sit at — list them here so they
@@ -692,44 +741,6 @@ export default function InkwellPage() {
                 <span className="flex-1 truncate text-text" title={t.body}>{t.is_agent ? '🤖 ' : ''}{t.body}</span>
               </button>
             ))}
-          </div>
-        )}
-        {commentQuote && (
-          <div className="border-t border-border px-3 py-2 shrink-0 flex flex-col gap-1.5" data-testid="inkwell-comment-composer">
-            <div className="text-[12px] text-muted truncate">
-              “{commentQuote.length > 140 ? `${commentQuote.slice(0, 140)}…` : commentQuote}”
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                value={commentNote}
-                onChange={e => setCommentNote(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') void sendComment()
-                  if (e.key === 'Escape') setCommentQuote(null)
-                }}
-                 
-                // opens from an explicit pill click; focus continues that gesture.
-                autoFocus
-                aria-label="Comment for the co-author"
-                placeholder="What should the co-author do with this passage?"
-                className="flex-1 min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[13px] text-text outline-none focus-ring"
-              />
-              <button
-                type="button"
-                onClick={() => void sendComment()}
-                disabled={!commentNote.trim() || commentSending}
-                className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text hover:bg-bg-hover cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
-              >
-                {commentSending ? 'Sending…' : 'Comment & notify'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCommentQuote(null)}
-                className="rounded-md px-2 py-1 text-[12px] text-muted hover:text-text cursor-pointer bg-transparent border-none transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         )}
       </main>

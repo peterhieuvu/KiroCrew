@@ -50,7 +50,7 @@ vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
     default: React.forwardRef(function Stub({ value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick }: {
       value: string
       onChange: (md: string) => void
-      onComment?: (q: string) => void
+      onComment?: (q: string, at: { x: number; y: number }) => void
       commentThreads?: { id: string }[]
       onThreadsResolved?: (ids: string[]) => void
       onThreadClick?: (id: string) => void
@@ -63,7 +63,7 @@ vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
         <div data-testid="editor-stub">
           <span data-testid="editor-value">{value}</span>
           <button type="button" onClick={() => onChange(value.replace('omega', 'omega user-edit'))}>stub-type</button>
-          <button type="button" onClick={() => onComment?.('a quoted passage')}>stub-select</button>
+          <button type="button" onClick={() => onComment?.('a quoted passage', { x: 40, y: 60 })}>stub-select</button>
           <button type="button" onClick={() => onThreadsResolved?.(['t2'])}>stub-orphan-t2</button>
           {commentThreads?.map(t => (
             <button key={t.id} type="button" onClick={() => onThreadClick?.(t.id)}>{`stub-open-${t.id}`}</button>
