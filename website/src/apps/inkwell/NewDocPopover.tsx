@@ -7,9 +7,11 @@ import { useEffect, useRef, useState } from 'react'
 interface Props {
   onCreate: (name: string, sourcePath: string | undefined) => Promise<void>
   onClose: () => void
+  /** Server rejection to show INSIDE the popover (the page's error bar is behind it). */
+  error?: string | null
 }
 
-export default function NewDocPopover({ onCreate, onClose }: Props) {
+export default function NewDocPopover({ onCreate, onClose, error }: Props) {
   const [name, setName] = useState('')
   const [path, setPath] = useState('')
   const [busy, setBusy] = useState(false)
@@ -73,6 +75,9 @@ export default function NewDocPopover({ onCreate, onClose }: Props) {
         />
         <span className="text-[11px] text-muted">Blank keeps the document in the artifact store only. A path makes that file the canonical copy — the store writes through to it.</span>
       </label>
+      {error && (
+        <div role="alert" className="text-[12px] text-danger break-words" data-testid="inkwell-newdoc-error">{error}</div>
+      )}
       <div className="flex items-center justify-end gap-1.5 pt-1">
         <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-[12px] text-muted hover:text-text cursor-pointer bg-transparent border-none">Cancel</button>
         <button type="button" onClick={() => void submit()} disabled={!name.trim() || busy} className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1 text-[12px] text-accent hover:bg-accent/20 cursor-pointer disabled:opacity-50 disabled:cursor-default">

@@ -66,6 +66,8 @@ export interface RichMarkdownEditorHandle {
   /** Re-resolve `anchor` NOW and splice `replacement` in as a normal edit
    *  (flows through onChange → autosave). False = anchor orphaned. */
   applySuggestion: (anchor: CommentAnchor, replacement: string) => boolean
+  /** Return keyboard focus to the editor (popover dismissed by keyboard). */
+  focus: () => void
   /** Wrapper-relative coordinates of a thread's LIVE decorated range (end of
    *  the range, for a popover beside the passage), or null when the thread
    *  is not currently decorated (orphaned / resolved). */
@@ -143,11 +145,25 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
 
   // Apply external value changes without emitting an update (no dirty flag,
   // no onChange echo loop).
+  // Comment pill state (settled on mouseup/keyup; see settleSelection).
+  const [commentSel, setCommentSel] = useState<{ anchor: CommentAnchor; x: number; y: number } | null>(null)
   useEffect(() => {
     if (!editor || value === lastEmittedRef.current) return
     lastEmittedRef.current = value
     editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false })
+    setCommentSel(null) // the selection the pill described no longer exists
   }, [editor, value])
+
+  // Stale-pill guard (sweep finding, 2026-09-10): the pill settles on
+  // mouseup/keyup, but a selection can collapse without either (a programmatic
+  // setContent, a click that lands on the pill itself, focus moving to a
+  // popover). Any collapsed selection retires the pill.
+  useEffect(() => {
+    if (!editor) return
+    const onSel = () => { if (editor.state.selection.empty) setCommentSel(null) }
+    editor.on('selectionUpdate', onSel)
+    return () => { editor.off('selectionUpdate', onSel) }
+  }, [editor])
 
   useEffect(() => {
     // emitUpdate=false: setEditable fires the 'update' event by default, which
@@ -163,6 +179,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   useImperativeHandle(ref, () => ({
     applySuggestion: (anchor: CommentAnchor, replacement: string) =>
       editor ? applySuggestion(editor, anchor, replacement) : false,
+    focus: () => { editor?.commands.focus() },
     threadAnchorRect: (threadId: string) => {
       if (!editor || !wrapRef.current) return null
       const range = liveThreadRanges(editor.state).find(r => r.id === threadId)
@@ -193,7 +210,6 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   // Settled on mouseup/keyup rather than every transaction so the pill does
   // not flicker mid-drag. Position comes from the editor's own coordsAtPos —
   // relative to the outer wrapper, like DocView's rect math.
-  const [commentSel, setCommentSel] = useState<{ anchor: CommentAnchor; x: number; y: number } | null>(null)
   const settleSelection = () => {
     if (!onComment || !editor) return
     // Snap outward to word boundaries: ragged free-hand anchors under-cover

@@ -7,6 +7,7 @@
  * Resolve otherwise, Reply to continue the thread.
  */
 import { useEffect, useRef, useState } from 'react'
+import { useClampedPosition } from './useClampedPosition'
 import { X } from 'lucide-react'
 import type { CommentThread } from './anchors'
 import { parseSuggestion } from './suggestions'
@@ -63,9 +64,9 @@ export default function ThreadPopover({
   }
 
   // Orphaned threads have no live range: dock them top-right instead.
-  const style = anchor
-    ? { left: Math.min(anchor.x + 8, 9999), top: anchor.y + 6 }
-    : { right: 12, top: 12 }
+  // Anchored ones are clamped inside the editor pane after layout.
+  const clamped = useClampedPosition(boxRef, anchor ? { left: anchor.x + 8, top: anchor.y + 6 } : null)
+  const style = anchor ? clamped : { right: 12, top: 12 }
 
   const chain = [root, ...replies]
 

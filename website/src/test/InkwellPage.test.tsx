@@ -44,6 +44,7 @@ vi.mock('../api/client', () => ({ api: apiMock }))
 // Editor stub: surfaces onChange / onComment / threads as pokeable controls,
 // and (phase 3) an imperative applySuggestion recorded on the mock.
 const applySuggestionMock = vi.hoisted(() => vi.fn().mockReturnValue(true))
+const editorFocusMock = vi.hoisted(() => vi.fn())
 vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
   const React = await import('react')
   return {
@@ -59,6 +60,7 @@ vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
     }, ref: React.Ref<unknown>) {
       React.useImperativeHandle(ref, () => ({
         applySuggestion: applySuggestionMock,
+        focus: editorFocusMock,
         threadAnchorRect: () => ({ x: 10, y: 20, top: 15 }),
       }))
       return (
@@ -367,6 +369,49 @@ describe('nudge coalescing', () => {
     expect(apiMock.sendChat).not.toHaveBeenCalled() // inside the debounce
     await act(async () => { await vi.advanceTimersByTimeAsync(1600) })
     expect(apiMock.sendChat).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('popover dismissal and composer focus (sweep regressions, 2026-09-10)', () => {
+  const THREADS = [{ id: 't1', body: 'tighten this', status: 'open', anchor: { quote: 'q1' } }]
+
+  it('Escape closes a caret-opened thread and it STAYS closed while the caret sits in it', async () => {
+    apiMock.artifactComments.mockResolvedValue({ comments: THREADS })
+    await openDoc()
+    fireEvent.click(screen.getByText('stub-caret-in-t1'))
+    expect(await screen.findByTestId('inkwell-thread-popover')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByTestId('inkwell-thread-popover')).not.toBeInTheDocument()
+    // A re-render with the caret still inside must not resurrect it.
+    fireEvent.click(screen.getByText('stub-caret-in-t1'))
+    expect(screen.queryByTestId('inkwell-thread-popover')).not.toBeInTheDocument()
+    // An explicit open (gutter dot / highlight click) always wins.
+    fireEvent.click(screen.getByText('stub-open-t1'))
+    expect(await screen.findByTestId('inkwell-thread-popover')).toBeInTheDocument()
+  })
+
+  it('Escape in the composer closes it and returns focus to the editor; Cancel does not steal focus', async () => {
+    await openDoc()
+    fireEvent.click(screen.getByText('stub-select'))
+    fireEvent.keyDown(screen.getByLabelText('Comment for the co-author'), { key: 'Escape' })
+    expect(screen.queryByTestId('inkwell-comment-composer')).not.toBeInTheDocument()
+    expect(editorFocusMock).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByText('stub-select'))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByTestId('inkwell-comment-composer')).not.toBeInTheDocument()
+    expect(editorFocusMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a server rejection of a new document is shown inside the popover', async () => {
+    apiMock.createArtifact.mockRejectedValue(new Error('source_path is outside the locations this instance may read'))
+    renderWithProviders(<InkwellPage />)
+    await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    fireEvent.click(screen.getByRole('button', { name: 'New document' }))
+    fireEvent.change(screen.getByLabelText('Document name'), { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    expect(screen.getByTestId('inkwell-newdoc-error')).toHaveTextContent('outside the locations')
+    expect(screen.getByTestId('inkwell-new-doc')).toBeInTheDocument() // still open
   })
 })
 

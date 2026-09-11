@@ -41,6 +41,7 @@ import ContextRail from './ContextRail'
 import ThreadPopover from './ThreadPopover'
 import NewDocPopover from './NewDocPopover'
 import { roundTripLoss, type RoundTripLoss } from './roundTrip'
+import { useClampedPosition } from './useClampedPosition'
 
 /** Map a top-level block index to its markdown source line. Blocks in the
  *  app's own serialization are separated by blank lines, so the Nth block
@@ -110,11 +111,32 @@ export default function InkwellPage() {
   // selection anywhere closes it — the user is about to comment (the pill
   // needs the space and must not be occluded), so a fresh comment can be
   // started inside an existing highlight. Caret leaving all highlights closes.
+  //
+  // Dismissal memory (sweep finding, 2026-09-10): Escape/click-outside call
+  // onClose, but the caret is still inside the highlight, so caret-follow
+  // re-opened the thread on the next render and Escape was a no-op. A thread
+  // dismissed while the caret sits in it stays closed until the caret leaves
+  // it or the user opens it explicitly (gutter dot / highlight click).
+  const dismissedThreadRef = useRef<string | null>(null)
   useEffect(() => {
-    if (caretCtx.selection !== null) setFocusThread(null)
-    else if (caretCtx.threadId) setFocusThread(caretCtx.threadId)
-    else setFocusThread(null)
+    if (caretCtx.selection !== null) {
+      dismissedThreadRef.current = null
+      setFocusThread(null)
+    } else if (caretCtx.threadId) {
+      if (dismissedThreadRef.current !== caretCtx.threadId) setFocusThread(caretCtx.threadId)
+    } else {
+      dismissedThreadRef.current = null
+      setFocusThread(null)
+    }
   }, [caretCtx])
+  const dismissThread = useCallback(() => {
+    dismissedThreadRef.current = caretCtx.threadId
+    setFocusThread(null)
+  }, [caretCtx.threadId])
+  const openThread = useCallback((id: string) => {
+    dismissedThreadRef.current = null
+    setFocusThread(id)
+  }, [])
 
   const fetchThreads = useCallback(async (slug: string) => {
     try {
@@ -175,7 +197,11 @@ export default function InkwellPage() {
   }, [fetchThreads])
 
   const [newDocOpen, setNewDocOpen] = useState(false)
+  // Shown INSIDE the popover: the page's error bar sits behind it and was
+  // occluded on a server rejection (sweep finding, 2026-09-10).
+  const [newDocError, setNewDocError] = useState<string | null>(null)
   const createDoc = useCallback(async (name: string, sourcePath: string | undefined) => {
+    setNewDocError(null)
     try {
       const created = (await api.createArtifact({
         name,
@@ -188,7 +214,7 @@ export default function InkwellPage() {
       await refreshDocs()
       await openDoc(created.slug)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setNewDocError(e instanceof Error ? e.message : String(e))
     }
   }, [refreshDocs, openDoc])
 
@@ -551,6 +577,16 @@ export default function InkwellPage() {
   // ```suggestion fence; the LATEST fence wins (the co-author may revise).
   // The anchor is always the root's — that is what the proposal replaces.
   const editorRef = useRef<RichMarkdownEditorHandle>(null)
+  const composerRef = useRef<HTMLDivElement>(null)
+  const composerStyle = useClampedPosition(
+    composerRef,
+    commentAnchor ? { left: Math.max(0, commentAt.x - 20), top: commentAt.y + 4 } : null,
+  )
+  /** Close the composer and hand focus back to the editor (keyboard flow). */
+  const closeComposer = useCallback((refocus: boolean) => {
+    setCommentAnchor(null)
+    if (refocus) editorRef.current?.focus()
+  }, [])
   const suggestionFor = useMemo(() => {
     const map = new Map<string, string>()
     for (const root of rootThreads) {
@@ -602,14 +638,20 @@ export default function InkwellPage() {
           <span className="flex-1 text-[13px] font-semibold text-text">Inkwell</span>
           <button
             type="button"
-            onClick={() => setNewDocOpen(o => !o)}
+            onClick={() => { setNewDocError(null); setNewDocOpen(o => !o) }}
             title="New document"
             aria-label="New document"
             className="p-1 rounded text-muted hover:text-text hover:bg-bg-hover cursor-pointer bg-transparent border-none transition-colors"
           >
             <FilePlus2 className="lucide-inline" />
           </button>
-          {newDocOpen && <NewDocPopover onCreate={createDoc} onClose={() => setNewDocOpen(false)} />}
+          {newDocOpen && (
+            <NewDocPopover
+              onCreate={createDoc}
+              onClose={() => setNewDocOpen(false)}
+              error={newDocError}
+            />
+          )}
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {docs.length === 0 && (
@@ -749,7 +791,7 @@ export default function InkwellPage() {
               }}
               commentThreads={rootThreads}
               onThreadsResolved={setOrphanedLocal}
-              onThreadClick={setFocusThread}
+              onThreadClick={openThread}
               onCaretContext={setCaretCtx}
               disabled={!!loss && !lossAck}
             />
@@ -771,18 +813,19 @@ export default function InkwellPage() {
               onResolve={() => void resolveThread(focusedRoot.id)}
               onReopen={() => void reopenThread(focusedRoot.id)}
               onReply={text => replyToThread(focusedRoot, text)}
-              onClose={() => setFocusThread(null)}
+              onClose={dismissThread}
             />
           )}
           {/* Comment composer — at the selection, where the pill was, not at
               the bottom of the editor. Escape or Cancel dismisses; Enter sends. */}
           {commentAnchor && (
             <div
+              ref={composerRef}
               role="dialog"
               aria-label="New comment"
               data-testid="inkwell-comment-composer"
               className="absolute z-20 w-[340px] rounded-lg border border-border bg-bg-elevated shadow-lg p-2.5 flex flex-col gap-1.5 text-[12px]"
-              style={{ left: Math.max(0, commentAt.x - 20), top: commentAt.y + 4 }}
+              style={composerStyle}
             >
               <div className="text-muted truncate italic" title={commentAnchor.quote}>
                 “{commentAnchor.quote.length > 120 ? `${commentAnchor.quote.slice(0, 120)}…` : commentAnchor.quote}”
@@ -792,7 +835,7 @@ export default function InkwellPage() {
                 onChange={e => setCommentNote(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') void sendComment()
-                  if (e.key === 'Escape') setCommentAnchor(null)
+                  if (e.key === 'Escape') closeComposer(true)
                 }}
                 // explicit pill click; focus continues that gesture.
                 autoFocus
@@ -803,7 +846,7 @@ export default function InkwellPage() {
               <div className="flex items-center justify-end gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setCommentAnchor(null)}
+                  onClick={() => closeComposer(false)}
                   className="rounded-md px-2 py-1 text-[12px] text-muted hover:text-text cursor-pointer bg-transparent border-none transition-colors"
                 >
                   Cancel
