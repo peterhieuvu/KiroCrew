@@ -24,6 +24,7 @@
  * entries — a PR blocker, not a prototype blocker.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BookOpen, Camera, FilePlus2, MessageSquareText, PenLine } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store'
 import { addSlotOptimistic, fetchSlots } from '../../store/dashboardSlice'
@@ -32,7 +33,7 @@ import type { Artifact, ChatSlot } from '../../types'
 import { api } from '../../api/client'
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from './RichMarkdownEditor'
 import CoAuthorPanel from './CoAuthorPanel'
-import { companionContextLines } from './companionPrompt'
+import { companionContextLines, COMMENT_ACTIVITY_NUDGE, SUGGESTION_APPLIED_REPLY, SUGGESTION_DECLINED_REPLY } from './companionPrompt'
 import { saveDoc, StaleDocError, INKWELL_TAG, type InkwellDoc } from './api'
 import type { CommentAnchor, CommentThread } from './anchors'
 import { parseSuggestion } from './suggestions'
@@ -59,6 +60,7 @@ function pickBoundSlot(slots: ChatSlot[] | undefined, slug: string): ChatSlot | 
 
 export default function InkwellPage() {
   const dispatch = useAppDispatch()
+  const { t } = useTranslation()
 
   const [docs, setDocs] = useState<Artifact[]>([])
   const [doc, setDoc] = useState<InkwellDoc | null>(null)
@@ -323,7 +325,7 @@ export default function InkwellPage() {
       // slots event, so `pickBoundSlot` reattaches from any browser.
       const created = await api.createChatSlot(
         undefined, undefined, undefined, undefined, undefined,
-        `Inkwell: ${doc.name}`, undefined, doc.slug,
+        t('apps.inkwell.page.slot_title', { name: doc.name }), undefined, doc.slug,
       )
       const key = created.key as string
       dispatch(addSlotOptimistic({
@@ -346,7 +348,7 @@ export default function InkwellPage() {
     } finally {
       setSlotCreating(false)
     }
-  }, [doc, slotCreating, dispatch])
+  }, [doc, slotCreating, dispatch, t])
 
   // ── busy→idle reload (papyrus's no-flush rule, on the artifact read) ──────
   const coAuthorBusy = useAppSelector(state => selectComposerBusy(state, slotKey))
@@ -369,11 +371,7 @@ export default function InkwellPage() {
     nudgePendingRef.current = null
     const key = slotKey ?? await startSession()
     if (!key) return
-    const msg =
-      'New comment activity on the document we are co-authoring. '
-      + 'Read the open comment threads with artifact_get_comments and '
-      + 'address any you have not already handled: act on each, reply on the '
-      + 'thread, and advance it with artifact_mark_review.'
+    const msg = COMMENT_ACTIVITY_NUDGE
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 10_000)
     try {
@@ -592,24 +590,24 @@ export default function InkwellPage() {
     if (!doc || !root.anchor || replacement === undefined) return
     const applied = editorRef.current?.applySuggestion(root.anchor, replacement)
     if (!applied) {
-      setError('Could not apply: the anchored passage no longer exists. Reject the proposal or re-anchor it.')
+      setError(t('apps.inkwell.page.apply_failed'))
       return
     }
     // The splice flowed through onChange → autosave. Record the decision on
     // the thread, then close it — accept IS the human resolve.
     try {
-      await api.replyArtifactComment(doc.slug, root.id, { text: 'Applied the suggestion.' })
+      await api.replyArtifactComment(doc.slug, root.id, { text: SUGGESTION_APPLIED_REPLY })
       await api.resolveComment(doc.slug, root.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
     void fetchThreads(doc.slug)
-  }, [doc, suggestionFor, fetchThreads])
+  }, [doc, suggestionFor, fetchThreads, t])
 
   const rejectSuggestion = useCallback(async (root: CommentThread) => {
     if (!doc) return
     try {
-      await api.replyArtifactComment(doc.slug, root.id, { text: 'Declined the suggestion.' })
+      await api.replyArtifactComment(doc.slug, root.id, { text: SUGGESTION_DECLINED_REPLY })
       await api.resolveComment(doc.slug, root.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -623,12 +621,12 @@ export default function InkwellPage() {
       <aside className="relative w-52 shrink-0 border-r border-border bg-card flex flex-col min-h-0">
         <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border shrink-0">
           <PenLine className="lucide-inline text-accent" />
-          <span className="flex-1 text-[13px] font-semibold text-text">Inkwell</span>
+          <span className="flex-1 text-[13px] font-semibold text-text">{t('apps.inkwell.page.sidebar_title')}</span>
           <button
             type="button"
             onClick={() => { setNewDocError(null); setNewDocOpen(o => !o) }}
-            title="New document"
-            aria-label="New document"
+            title={t('apps.inkwell.page.new_document')}
+            aria-label={t('apps.inkwell.page.new_document')}
             className="p-1 rounded text-muted hover:text-text hover:bg-bg-hover cursor-pointer bg-transparent border-none transition-colors"
           >
             <FilePlus2 className="lucide-inline" />
@@ -643,7 +641,7 @@ export default function InkwellPage() {
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {docs.length === 0 && (
-            <div className="px-3 py-2 text-[12px] text-muted">No documents yet.</div>
+            <div className="px-3 py-2 text-[12px] text-muted">{t('apps.inkwell.page.no_documents')}</div>
           )}
           {docs.map(d => (
             <button
@@ -664,16 +662,16 @@ export default function InkwellPage() {
       <main className="flex-1 min-w-0 flex flex-col min-h-0">
         <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border shrink-0">
           <span className="flex-1 truncate text-[13px] text-text">
-            {doc ? doc.name : 'Select or create a document'}
+            {doc ? doc.name : t('apps.inkwell.page.no_doc_selected')}
             {dirty ? ' •' : saving ? ' ⋯' : ''}
           </span>
           {doc && openRoots.length > 0 && (
             <span
               className="text-[11px] rounded-full bg-accent/15 text-accent px-2 py-0.5"
-              title={`${openRoots.length} open comment thread${openRoots.length === 1 ? '' : 's'} — click a highlight or gutter dot to open one`}
+              title={t('apps.inkwell.page.open_threads_title', { count: openRoots.length })}
               data-testid="inkwell-thread-count"
             >
-              {openRoots.length} {openRoots.length === 1 ? 'thread' : 'threads'}
+              {t('apps.inkwell.page.thread_count', { count: openRoots.length })}
             </span>
           )}
           {doc && resolvedCount > 0 && (
@@ -681,29 +679,29 @@ export default function InkwellPage() {
               type="button"
               onClick={() => setShowResolved(v => !v)}
               aria-pressed={showResolved}
-              title={showResolved ? 'Hide resolved threads' : `Show ${resolvedCount} resolved thread${resolvedCount === 1 ? '' : 's'}`}
+              title={showResolved ? t('apps.inkwell.page.hide_resolved_title') : t('apps.inkwell.page.show_resolved_title', { count: resolvedCount })}
               className={`text-[11px] rounded-full px-2 py-0.5 border cursor-pointer transition-colors ${
                 showResolved ? 'bg-bg-hover text-text border-border' : 'bg-transparent text-muted border-border/60 hover:text-text'
               }`}
               data-testid="inkwell-show-resolved"
             >
-              {showResolved ? 'Hide resolved' : `${resolvedCount} resolved`}
+              {showResolved ? t('apps.inkwell.page.hide_resolved') : t('apps.inkwell.page.resolved_count', { count: resolvedCount })}
             </button>
           )}
           {merged && !conflict && (
             <span className="text-[12px] text-success">
-              Merged the co-author’s changes into your draft.
+              {t('apps.inkwell.page.merged_notice')}
             </span>
           )}
           {conflict && (
             <span className="text-[12px] text-danger flex items-center gap-2">
-              Changed on the server.
+              {t('apps.inkwell.page.changed_on_server')}
               <button
                 type="button"
                 onClick={() => void reloadFromServer()}
                 className="underline cursor-pointer bg-transparent border-none text-danger"
               >
-                Reload
+                {t('apps.inkwell.page.reload')}
               </button>
             </span>
           )}
@@ -711,27 +709,27 @@ export default function InkwellPage() {
             type="button"
             onClick={() => void flushSave(true)}
             disabled={!doc}
-            title="Snapshot a numbered version (Cmd/Ctrl+S). Autosave already persists continuously."
+            title={t('apps.inkwell.page.snapshot_title')}
             className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text hover:bg-bg-hover cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
           >
-            <Camera className="lucide-inline" /> Snapshot
+            <Camera className="lucide-inline" /> {t('apps.inkwell.page.snapshot')}
           </button>
           <button
             type="button"
             onClick={() => setRailOpen(o => !o)}
             disabled={!doc}
-            title={railOpen ? 'Hide context' : 'Show related knowledge and memory (no agent turn)'}
+            title={railOpen ? t('apps.inkwell.page.hide_context_title') : t('apps.inkwell.page.show_context_title')}
             className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text hover:bg-bg-hover cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
           >
-            <BookOpen className="lucide-inline" /> Context
+            <BookOpen className="lucide-inline" /> {t('apps.inkwell.page.context')}
           </button>
           <button
             type="button"
             onClick={toggleChat}
-            title={chatOpen ? 'Hide co-author' : 'Show co-author'}
+            title={chatOpen ? t('apps.inkwell.page.hide_co_author_title') : t('apps.inkwell.page.show_co_author_title')}
             className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text hover:bg-bg-hover cursor-pointer transition-colors"
           >
-            <MessageSquareText className="lucide-inline" /> Co-author
+            <MessageSquareText className="lucide-inline" /> {t('apps.inkwell.page.co_author')}
           </button>
         </div>
         {loss && !lossAck && (
@@ -741,10 +739,10 @@ export default function InkwellPage() {
             className="px-3 py-2 text-[12px] border-b border-warning/40 bg-warning/10 text-text shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1"
           >
             <span>
-              This document contains markdown the editor cannot preserve
-              {loss.htmlComments > 0 && ` — ${loss.htmlComments} HTML comment${loss.htmlComments === 1 ? '' : 's'}`}
-              {loss.missingWords.length > 0 && ` — text: “${loss.missingWords.slice(0, 6).join(' ')}${loss.missingWords.length > 6 ? ' …' : ''}”`}
-              . Editing here would drop it, so the editor is read-only.
+              {t('apps.inkwell.page.lossy_intro')}
+              {loss.htmlComments > 0 && ` — ${t('apps.inkwell.page.lossy_html_comments', { count: loss.htmlComments })}`}
+              {loss.missingWords.length > 0 && ` — ${t('apps.inkwell.page.lossy_text', { words: `${loss.missingWords.slice(0, 6).join(' ')}${loss.missingWords.length > 6 ? ' …' : ''}` })}`}
+              {t('apps.inkwell.page.lossy_outro')}
             </span>
             <button
               type="button"
@@ -752,13 +750,13 @@ export default function InkwellPage() {
               className="rounded-md border border-border bg-bg-elevated px-2 py-0.5 text-[12px] text-text hover:bg-bg-hover cursor-pointer"
               data-testid="inkwell-lossy-accept"
             >
-              Edit anyway (drop it)
+              {t('apps.inkwell.page.lossy_edit_anyway')}
             </button>
             <a
               href={`/artifacts/${encodeURIComponent(doc?.slug ?? '')}`}
               className="text-[12px] underline text-muted hover:text-text"
             >
-              Open raw in Artifacts
+              {t('apps.inkwell.page.lossy_open_raw')}
             </a>
           </div>
         )}
@@ -785,7 +783,7 @@ export default function InkwellPage() {
             />
           ) : (
             <div className="h-full flex items-center justify-center text-[13px] text-muted">
-              Open a document to start writing.
+              {t('apps.inkwell.page.empty_state')}
             </div>
           )}
           {focusedRoot && !commentAnchor && (
@@ -810,7 +808,7 @@ export default function InkwellPage() {
             <div
               ref={composerRef}
               role="dialog"
-              aria-label="New comment"
+              aria-label={t('apps.inkwell.page.composer_label')}
               data-testid="inkwell-comment-composer"
               className="absolute z-20 w-[340px] rounded-lg border border-border bg-bg-elevated shadow-lg p-2.5 flex flex-col gap-1.5 text-[12px]"
               style={composerStyle}
@@ -827,8 +825,8 @@ export default function InkwellPage() {
                 }}
                 // explicit pill click; focus continues that gesture.
                 autoFocus
-                aria-label="Comment for the co-author"
-                placeholder="Ask a question or request an edit…"
+                aria-label={t('apps.inkwell.page.composer_input_aria')}
+                placeholder={t('apps.inkwell.page.composer_placeholder')}
                 className="w-full rounded-md border border-border bg-bg px-2 py-1 text-[13px] text-text outline-none focus-ring"
               />
               <div className="flex items-center justify-end gap-1.5">
@@ -837,7 +835,7 @@ export default function InkwellPage() {
                   onClick={() => closeComposer(false)}
                   className="rounded-md px-2 py-1 text-[12px] text-muted hover:text-text cursor-pointer bg-transparent border-none transition-colors"
                 >
-                  Cancel
+                  {t('apps.inkwell.page.cancel')}
                 </button>
                 <button
                   type="button"
@@ -845,7 +843,7 @@ export default function InkwellPage() {
                   disabled={!commentNote.trim() || commentSending}
                   className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1 text-[12px] text-accent hover:bg-accent/20 cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
                 >
-                  {commentSending ? 'Sending…' : 'Comment & notify'}
+                  {commentSending ? t('apps.inkwell.page.sending') : t('apps.inkwell.page.comment_notify')}
                 </button>
               </div>
             </div>
@@ -855,17 +853,17 @@ export default function InkwellPage() {
             stay reachable; everything anchored lives in the popover instead. */}
         {rootThreads.some(isOrphaned) && (
           <div className="border-t border-border shrink-0 max-h-28 overflow-y-auto" data-testid="inkwell-orphaned-threads">
-            {rootThreads.filter(isOrphaned).map(t => (
+            {rootThreads.filter(isOrphaned).map(th => (
               <button
-                key={t.id}
+                key={th.id}
                 type="button"
-                onClick={() => setFocusThread(t.id)}
+                onClick={() => setFocusThread(th.id)}
                 className={`w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] border-b border-border/50 last:border-b-0 cursor-pointer bg-transparent border-x-0 border-t-0 hover:bg-bg-hover ${
-                  focusThread === t.id ? 'bg-bg-hover' : ''
+                  focusThread === th.id ? 'bg-bg-hover' : ''
                 }`}
               >
-                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn" title="The anchored passage no longer exists in the document">orphaned</span>
-                <span className="flex-1 truncate text-text" title={t.body}>{t.is_agent ? '🤖 ' : ''}{t.body}</span>
+                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn" title={t('apps.inkwell.page.orphaned_title')}>{t('apps.inkwell.page.orphaned')}</span>
+                <span className="flex-1 truncate text-text" title={th.body}>{th.is_agent ? '🤖 ' : ''}{th.body}</span>
               </button>
             ))}
           </div>

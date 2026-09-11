@@ -15,6 +15,7 @@
  * entries — a PR blocker, not a prototype blocker.
  */
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Loader2, MessageSquarePlus, Sparkles, X } from 'lucide-react'
 import { useAppDispatch } from '../../store'
 import { switchSlot } from '../../store/chatSlice'
@@ -36,6 +37,7 @@ export default function CoAuthorPanel({
   onClose,
 }: CoAuthorPanelProps) {
   const dispatch = useAppDispatch()
+  const { t } = useTranslation()
   const prevSlotRef = useRef<string | null>(null)
 
   // Activate the document's session. Re-dispatches when the document changes
@@ -50,17 +52,17 @@ export default function CoAuthorPanel({
   return (
     <aside
       className="flex flex-col h-full min-h-0 border-l border-border bg-card overflow-hidden"
-      aria-label="Co-author chat"
+      aria-label={t('apps.inkwell.coAuthor.panel_label')}
       data-testid="inkwell-co-author"
     >
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border shrink-0">
         <Sparkles className="lucide-inline text-accent shrink-0" />
-        <span className="flex-1 truncate text-[12px] font-medium text-text">Co-author</span>
+        <span className="flex-1 truncate text-[12px] font-medium text-text">{t('apps.inkwell.coAuthor.title')}</span>
         <button
           type="button"
           onClick={onClose}
-          title="Close panel"
-          aria-label="Close co-author panel"
+          title={t('apps.inkwell.coAuthor.close_title')}
+          aria-label={t('apps.inkwell.coAuthor.close_label')}
           className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 cursor-pointer bg-transparent border-none transition-colors"
         >
           <X className="lucide-inline" />
@@ -73,18 +75,18 @@ export default function CoAuthorPanel({
         ) : creating ? (
           <div className="flex-1 flex items-center justify-center gap-2 text-muted text-[13px]" role="status">
             <Loader2 className="lucide-inline animate-spin motion-reduce:animate-none" />
-            Starting session…
+            {t('apps.inkwell.coAuthor.starting_session')}
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 text-center text-muted text-[13px]">
-            <span>No co-author session for this document yet.</span>
+            <span>{t('apps.inkwell.coAuthor.no_session')}</span>
             <button
               type="button"
               onClick={onStartSession}
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-[13px] text-text hover:bg-bg-hover cursor-pointer transition-colors focus-ring"
             >
               <MessageSquarePlus className="lucide-inline" />
-              Start a session
+              {t('apps.inkwell.coAuthor.start_session')}
             </button>
           </div>
         )}

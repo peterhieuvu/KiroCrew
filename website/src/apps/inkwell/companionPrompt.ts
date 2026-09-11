@@ -13,6 +13,24 @@
  * to the source), but artifact tools are the preferred path.
  */
 
+/**
+ * The nudge message sent into the co-author slot when comment activity lands.
+ * Model-facing (an instruction to the agent), so it lives here, off the i18n
+ * catalog, like the context lines above.
+ */
+export const COMMENT_ACTIVITY_NUDGE =
+  'New comment activity on the document we are co-authoring. '
+  + 'Read the open comment threads with artifact_get_comments and '
+  + 'address any you have not already handled: act on each, reply on the '
+  + 'thread, and advance it with artifact_mark_review.'
+
+/** Auto-reply recorded on a thread when the human accepts its suggestion.
+ *  Model/record-facing thread body, not a UI string. */
+export const SUGGESTION_APPLIED_REPLY = 'Applied the suggestion.'
+
+/** Auto-reply recorded on a thread when the human declines its suggestion. */
+export const SUGGESTION_DECLINED_REPLY = 'Declined the suggestion.'
+
 export function companionContextLines(
   docName: string,
   slug: string,

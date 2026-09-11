@@ -16,6 +16,7 @@
  * Fetches are debounced and stale responses are dropped by request id.
  */
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BookOpen, Brain, RefreshCw } from 'lucide-react'
 import { api } from '../../api/client'
 import type { CaretHeadings } from './headings'
@@ -87,6 +88,7 @@ interface Props {
 }
 
 export default function ContextRail({ markdown, caret, selection, onClose }: Props) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [knowledge, setKnowledge] = useState<KnowledgeCard[]>([])
   const [memory, setMemory] = useState<MemoryEntry[]>([])
@@ -115,7 +117,7 @@ export default function ContextRail({ markdown, caret, selection, onClose }: Pro
                 .catch(() => null),
           ])
           if (id !== reqRef.current) return // stale
-          if (!k && !m) { setUnavailable('Context sources are not reachable — check the app\'s API permissions.'); return }
+          if (!k && !m) { setUnavailable(t('apps.inkwell.contextRail.sources_unavailable')); return }
           setUnavailable(null)
           setKnowledge((k?.results ?? []).slice(0, MAX_KNOWLEDGE))
           setMemory(rankMemory(m ?? [], terms))
@@ -128,28 +130,28 @@ export default function ContextRail({ markdown, caret, selection, onClose }: Pro
   }, [markdown, caret?.h1, caret?.nearest, selection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <aside className="w-[300px] shrink-0 border-l border-border bg-card flex flex-col min-h-0" aria-label="Context rail" data-testid="inkwell-context-rail">
+    <aside className="w-[300px] shrink-0 border-l border-border bg-card flex flex-col min-h-0" aria-label={t('apps.inkwell.contextRail.rail_label')} data-testid="inkwell-context-rail">
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border shrink-0">
         <BookOpen className="lucide-inline text-accent" />
-        <span className="flex-1 text-[13px] font-semibold text-text">Context</span>
-        {loading && <RefreshCw className="lucide-inline text-muted animate-spin" aria-label="Loading" />}
+        <span className="flex-1 text-[13px] font-semibold text-text">{t('apps.inkwell.contextRail.title')}</span>
+        {loading && <RefreshCw className="lucide-inline text-muted animate-spin" aria-label={t('apps.inkwell.contextRail.loading')} />}
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close context rail"
+          aria-label={t('apps.inkwell.contextRail.close_label')}
           className="p-1 rounded text-muted hover:text-text hover:bg-bg-hover cursor-pointer bg-transparent border-none transition-colors"
         >
           ×
         </button>
       </div>
       <div className="px-3 py-1.5 text-[11px] text-muted truncate border-b border-border/50" title={query}>
-        {query ? `Searching: ${query}` : 'Place the caret under a heading to search.'}
+        {query ? t('apps.inkwell.contextRail.searching', { query }) : t('apps.inkwell.contextRail.search_hint')}
       </div>
       <div className="flex-1 overflow-y-auto">
         {unavailable && <div className="px-3 py-2 text-[12px] text-danger">{unavailable}</div>}
         <section className="px-3 pt-2">
-          <h3 className="text-[11px] uppercase tracking-wide text-muted flex items-center gap-1"><BookOpen className="lucide-inline" /> Knowledge</h3>
-          {knowledge.length === 0 && !loading && <div className="py-1 text-[12px] text-muted">No matching documents.</div>}
+          <h3 className="text-[11px] uppercase tracking-wide text-muted flex items-center gap-1"><BookOpen className="lucide-inline" /> {t('apps.inkwell.contextRail.knowledge')}</h3>
+          {knowledge.length === 0 && !loading && <div className="py-1 text-[12px] text-muted">{t('apps.inkwell.contextRail.no_knowledge')}</div>}
           {knowledge.map(c => (
             <div key={c.id} className="py-1.5 border-b border-border/40 last:border-b-0">
               <div className="text-[12px] text-text font-medium truncate" title={c.title}>{c.title}</div>
@@ -159,8 +161,8 @@ export default function ContextRail({ markdown, caret, selection, onClose }: Pro
           ))}
         </section>
         <section className="px-3 pt-3 pb-2">
-          <h3 className="text-[11px] uppercase tracking-wide text-muted flex items-center gap-1"><Brain className="lucide-inline" /> Memory</h3>
-          {memory.length === 0 && !loading && <div className="py-1 text-[12px] text-muted">No related decisions on record.</div>}
+          <h3 className="text-[11px] uppercase tracking-wide text-muted flex items-center gap-1"><Brain className="lucide-inline" /> {t('apps.inkwell.contextRail.memory')}</h3>
+          {memory.length === 0 && !loading && <div className="py-1 text-[12px] text-muted">{t('apps.inkwell.contextRail.no_memory')}</div>}
           {memory.map(e => (
             <div key={e.key} className="py-1.5 border-b border-border/40 last:border-b-0">
               <div className="text-[11px] text-accent font-mono truncate" title={e.key}>{e.key}</div>

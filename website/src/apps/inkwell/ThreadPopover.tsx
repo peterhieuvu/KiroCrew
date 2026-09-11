@@ -7,6 +7,7 @@
  * Resolve otherwise, Reply to continue the thread.
  */
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useClampedPosition } from './useClampedPosition'
 import { X } from 'lucide-react'
 import type { CommentThread } from './anchors'
@@ -37,6 +38,7 @@ function bodyWithoutFence(body: string): string {
 export default function ThreadPopover({
   root, replies, suggestion, orphaned, anchor, onAccept, onReject, onResolve, onReopen, onReply, onClose,
 }: Props) {
+  const { t } = useTranslation()
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -74,7 +76,7 @@ export default function ThreadPopover({
     <div
       ref={boxRef}
       role="dialog"
-      aria-label="Comment thread"
+      aria-label={t('apps.inkwell.threadPopover.dialog_label')}
       data-testid="inkwell-thread-popover"
       className="absolute z-20 w-[340px] max-h-[60%] flex flex-col rounded-lg border border-border bg-bg-elevated shadow-lg text-[12px]"
       style={style}
@@ -85,12 +87,12 @@ export default function ThreadPopover({
             : root.status === 'review' ? 'bg-success/15 text-success' : 'bg-accent/15 text-accent'
         }`}>{root.status}</span>
         {orphaned && (
-          <span className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn" title="The anchored passage no longer exists in the document">orphaned</span>
+          <span className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn" title={t('apps.inkwell.threadPopover.orphaned_title')}>{t('apps.inkwell.threadPopover.orphaned')}</span>
         )}
         {root.anchor?.quote && (
           <span className="flex-1 truncate text-muted italic" title={root.anchor.quote}>“{root.anchor.quote}”</span>
         )}
-        <button type="button" onClick={onClose} aria-label="Close thread" className="p-0.5 rounded text-muted hover:text-text hover:bg-bg-hover cursor-pointer bg-transparent border-none"><X size={13} /></button>
+        <button type="button" onClick={onClose} aria-label={t('apps.inkwell.threadPopover.close_label')} className="p-0.5 rounded text-muted hover:text-text hover:bg-bg-hover cursor-pointer bg-transparent border-none"><X size={13} /></button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-2">
@@ -98,14 +100,14 @@ export default function ThreadPopover({
           const fence = parseSuggestion(c.body)
           return (
             <div key={c.id} className="flex flex-col gap-0.5">
-              <div className="text-[10px] text-muted">{c.is_agent ? '🤖 co-author' : 'you'}</div>
+              <div className="text-[10px] text-muted">{c.is_agent ? t('apps.inkwell.threadPopover.author_co_author') : t('apps.inkwell.threadPopover.author_you')}</div>
               <div className="text-text whitespace-pre-wrap">{fence !== null ? bodyWithoutFence(c.body) : c.body}</div>
               {fence !== null && (
                 <pre
                   data-testid="inkwell-suggestion-preview"
                   className="mt-1 rounded border border-success/40 bg-success/10 px-2 py-1 text-[11px] text-text whitespace-pre-wrap font-sans"
-                  title="Proposed replacement for the quoted passage"
-                >{fence === '' ? '(delete the passage)' : fence}</pre>
+                  title={t('apps.inkwell.threadPopover.suggestion_title')}
+                >{fence === '' ? t('apps.inkwell.threadPopover.suggestion_delete') : fence}</pre>
               )}
             </div>
           )
@@ -118,22 +120,22 @@ export default function ThreadPopover({
             value={reply}
             onChange={e => setReply(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') void send() }}
-            aria-label="Reply to thread"
-            placeholder="Reply…"
+            aria-label={t('apps.inkwell.threadPopover.reply_aria')}
+            placeholder={t('apps.inkwell.threadPopover.reply_placeholder')}
             className="flex-1 min-w-0 rounded-md border border-border bg-bg px-2 py-1 text-[12px] text-text outline-none focus-ring"
           />
-          <button type="button" onClick={() => void send()} disabled={!reply.trim() || sending} className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text hover:bg-bg-hover cursor-pointer disabled:opacity-50 disabled:cursor-default">Reply</button>
+          <button type="button" onClick={() => void send()} disabled={!reply.trim() || sending} className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text hover:bg-bg-hover cursor-pointer disabled:opacity-50 disabled:cursor-default">{t('apps.inkwell.threadPopover.reply')}</button>
         </div>
         <div className="flex items-center gap-1.5 justify-end">
           {root.status === 'resolved' ? (
-            <button type="button" onClick={onReopen} title="Reopen this thread" className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text hover:bg-bg-hover cursor-pointer">Reopen</button>
+            <button type="button" onClick={onReopen} title={t('apps.inkwell.threadPopover.reopen_title')} className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text hover:bg-bg-hover cursor-pointer">{t('apps.inkwell.threadPopover.reopen')}</button>
           ) : suggestion !== undefined ? (
             <>
-              <button type="button" onClick={onAccept} disabled={orphaned} title={orphaned ? 'Cannot apply: the passage no longer exists' : 'Apply the proposed replacement and resolve'} className="rounded-md border border-success/40 bg-success/10 px-2 py-1 text-[11px] text-success hover:bg-success/20 cursor-pointer disabled:opacity-50 disabled:cursor-default">Accept</button>
-              <button type="button" onClick={onReject} title="Decline the proposal and resolve" className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-muted hover:text-text hover:bg-bg-hover cursor-pointer">Reject</button>
+              <button type="button" onClick={onAccept} disabled={orphaned} title={orphaned ? t('apps.inkwell.threadPopover.accept_title_orphaned') : t('apps.inkwell.threadPopover.accept_title')} className="rounded-md border border-success/40 bg-success/10 px-2 py-1 text-[11px] text-success hover:bg-success/20 cursor-pointer disabled:opacity-50 disabled:cursor-default">{t('apps.inkwell.threadPopover.accept')}</button>
+              <button type="button" onClick={onReject} title={t('apps.inkwell.threadPopover.reject_title')} className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-muted hover:text-text hover:bg-bg-hover cursor-pointer">{t('apps.inkwell.threadPopover.reject')}</button>
             </>
           ) : (
-            <button type="button" onClick={onResolve} title="Resolve this thread (human-only — the co-author can only mark it for review)" className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text hover:bg-bg-hover cursor-pointer">Resolve</button>
+            <button type="button" onClick={onResolve} title={t('apps.inkwell.threadPopover.resolve_title')} className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text hover:bg-bg-hover cursor-pointer">{t('apps.inkwell.threadPopover.resolve')}</button>
           )}
         </div>
       </div>

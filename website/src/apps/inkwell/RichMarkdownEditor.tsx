@@ -22,6 +22,7 @@
  * entries — a PR blocker, not a prototype blocker (same status as InkwellPage).
  */
 import { useEffect, useImperativeHandle, useReducer, useRef, useState, forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { contentExtensions } from './extensions'
 import {
@@ -83,6 +84,7 @@ const MAX_QUOTE_LEN = 500
 const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function RichMarkdownEditor({
   value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick, onCaretContext, disabled,
 }, ref) {
+  const { t } = useTranslation()
   // Keep the latest onChange without making it an editor dependency — the
   // editor instance must survive parent re-renders or the caret dies.
   const onChangeRef = useRef(onChange)
@@ -275,7 +277,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   const setLink = () => {
     const prev = editor.getAttributes('link').href as string | undefined
     // Prototype idiom (matches InkwellPage's createDoc): prompt over popover.
-    const url = window.prompt('Link URL (empty to remove):', prev || '')
+    const url = window.prompt(t('apps.inkwell.editor.link_prompt'), prev || '')
     if (url === null) return
     const chain = editor.chain().focus().extendMarkRange('link')
     if (url === '') chain.unsetLink().run()
@@ -286,25 +288,25 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
 
   return (
     <div ref={wrapRef} className="inkwell-rich relative flex h-full min-h-0 flex-col" data-testid="inkwell-editor">
-      <div className="flex items-center gap-0.5 border-b border-border px-2 py-1 shrink-0 flex-wrap" role="toolbar" aria-label="Formatting">
-        <IconButton aria-label="Undo" title="Undo" disabled={disabled || !editor.can().undo()} onClick={() => editor.chain().focus().undo().run()} className="text-muted hover:text-text"><Undo2 size={15} /></IconButton>
-        <IconButton aria-label="Redo" title="Redo" disabled={disabled || !editor.can().redo()} onClick={() => editor.chain().focus().redo().run()} className="text-muted hover:text-text"><Redo2 size={15} /></IconButton>
+      <div className="flex items-center gap-0.5 border-b border-border px-2 py-1 shrink-0 flex-wrap" role="toolbar" aria-label={t('apps.inkwell.editor.toolbar_label')}>
+        <IconButton aria-label={t('apps.inkwell.editor.undo')} title={t('apps.inkwell.editor.undo')} disabled={disabled || !editor.can().undo()} onClick={() => editor.chain().focus().undo().run()} className="text-muted hover:text-text"><Undo2 size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.redo')} title={t('apps.inkwell.editor.redo')} disabled={disabled || !editor.can().redo()} onClick={() => editor.chain().focus().redo().run()} className="text-muted hover:text-text"><Redo2 size={15} /></IconButton>
         <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-        <IconButton aria-label="Heading 1" title="Heading 1" disabled={disabled} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={btnCls(editor.isActive('heading', { level: 1 }))}><Heading1 size={15} /></IconButton>
-        <IconButton aria-label="Heading 2" title="Heading 2" disabled={disabled} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={btnCls(editor.isActive('heading', { level: 2 }))}><Heading2 size={15} /></IconButton>
-        <IconButton aria-label="Heading 3" title="Heading 3" disabled={disabled} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={btnCls(editor.isActive('heading', { level: 3 }))}><Heading3 size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.heading1')} title={t('apps.inkwell.editor.heading1')} disabled={disabled} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={btnCls(editor.isActive('heading', { level: 1 }))}><Heading1 size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.heading2')} title={t('apps.inkwell.editor.heading2')} disabled={disabled} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={btnCls(editor.isActive('heading', { level: 2 }))}><Heading2 size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.heading3')} title={t('apps.inkwell.editor.heading3')} disabled={disabled} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={btnCls(editor.isActive('heading', { level: 3 }))}><Heading3 size={15} /></IconButton>
         <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-        <IconButton aria-label="Bold" title="Bold (Cmd/Ctrl+B)" disabled={disabled} onClick={() => editor.chain().focus().toggleBold().run()} className={btnCls(editor.isActive('bold'))}><Bold size={15} /></IconButton>
-        <IconButton aria-label="Italic" title="Italic (Cmd/Ctrl+I)" disabled={disabled} onClick={() => editor.chain().focus().toggleItalic().run()} className={btnCls(editor.isActive('italic'))}><Italic size={15} /></IconButton>
-        <IconButton aria-label="Strikethrough" title="Strikethrough" disabled={disabled} onClick={() => editor.chain().focus().toggleStrike().run()} className={btnCls(editor.isActive('strike'))}><Strikethrough size={15} /></IconButton>
-        <IconButton aria-label="Inline code" title="Inline code" disabled={disabled} onClick={() => editor.chain().focus().toggleCode().run()} className={btnCls(editor.isActive('code'))}><Code size={15} /></IconButton>
-        <IconButton aria-label="Link" title="Link" disabled={disabled} onClick={setLink} className={btnCls(editor.isActive('link'))}><Link2 size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.bold')} title={t('apps.inkwell.editor.bold_title')} disabled={disabled} onClick={() => editor.chain().focus().toggleBold().run()} className={btnCls(editor.isActive('bold'))}><Bold size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.italic')} title={t('apps.inkwell.editor.italic_title')} disabled={disabled} onClick={() => editor.chain().focus().toggleItalic().run()} className={btnCls(editor.isActive('italic'))}><Italic size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.strikethrough')} title={t('apps.inkwell.editor.strikethrough')} disabled={disabled} onClick={() => editor.chain().focus().toggleStrike().run()} className={btnCls(editor.isActive('strike'))}><Strikethrough size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.inline_code')} title={t('apps.inkwell.editor.inline_code')} disabled={disabled} onClick={() => editor.chain().focus().toggleCode().run()} className={btnCls(editor.isActive('code'))}><Code size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.link')} title={t('apps.inkwell.editor.link')} disabled={disabled} onClick={setLink} className={btnCls(editor.isActive('link'))}><Link2 size={15} /></IconButton>
         <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-        <IconButton aria-label="Bullet list" title="Bullet list" disabled={disabled} onClick={() => editor.chain().focus().toggleBulletList().run()} className={btnCls(editor.isActive('bulletList'))}><List size={15} /></IconButton>
-        <IconButton aria-label="Numbered list" title="Numbered list" disabled={disabled} onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btnCls(editor.isActive('orderedList'))}><ListOrdered size={15} /></IconButton>
-        <IconButton aria-label="Blockquote" title="Blockquote" disabled={disabled} onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btnCls(editor.isActive('blockquote'))}><TextQuote size={15} /></IconButton>
-        <IconButton aria-label="Code block" title="Code block" disabled={disabled} onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={btnCls(editor.isActive('codeBlock'))}><SquareCode size={15} /></IconButton>
-        <IconButton aria-label="Horizontal rule" title="Horizontal rule" disabled={disabled} onClick={() => editor.chain().focus().setHorizontalRule().run()} className="text-muted hover:text-text"><Minus size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.bullet_list')} title={t('apps.inkwell.editor.bullet_list')} disabled={disabled} onClick={() => editor.chain().focus().toggleBulletList().run()} className={btnCls(editor.isActive('bulletList'))}><List size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.numbered_list')} title={t('apps.inkwell.editor.numbered_list')} disabled={disabled} onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btnCls(editor.isActive('orderedList'))}><ListOrdered size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.blockquote')} title={t('apps.inkwell.editor.blockquote')} disabled={disabled} onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btnCls(editor.isActive('blockquote'))}><TextQuote size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.code_block')} title={t('apps.inkwell.editor.code_block')} disabled={disabled} onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={btnCls(editor.isActive('codeBlock'))}><SquareCode size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.horizontal_rule')} title={t('apps.inkwell.editor.horizontal_rule')} disabled={disabled} onClick={() => editor.chain().focus().setHorizontalRule().run()} className="text-muted hover:text-text"><Minus size={15} /></IconButton>
       </div>
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions --
           Passive listeners only: the div relays clicks into the contenteditable
@@ -327,8 +329,8 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
           key={m.id}
           type="button"
           data-testid="inkwell-gutter-marker"
-          aria-label={`Open comment thread (${m.status})`}
-          title="Open comment thread"
+          aria-label={t('apps.inkwell.editor.gutter_marker_aria', { status: m.status })}
+          title={t('apps.inkwell.editor.gutter_marker_title')}
           onClick={() => onThreadClick(m.id)}
           className={`absolute right-1 h-3 w-3 rounded-full border cursor-pointer p-0 transition-colors ${
             m.status === 'resolved'
@@ -345,7 +347,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
           type="button"
           data-testid="inkwell-comment-pill"
           disabled={commentSel.anchor === null}
-          title={commentSel.anchor === null ? `Selection too long to comment on (limit ${MAX_QUOTE_LEN} characters) — select a shorter passage` : undefined}
+          title={commentSel.anchor === null ? t('apps.inkwell.editor.pill_too_long_title', { limit: MAX_QUOTE_LEN }) : undefined}
           className="absolute z-10 inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text shadow-md hover:bg-bg-hover cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           style={{ left: commentSel.x, top: commentSel.y }}
           // onMouseDown, not onClick: a click would first blur the editor,
@@ -358,7 +360,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
             onComment?.(anchor, { x: commentSel.x, y: commentSel.y })
           }}
         >
-          <MessageSquarePlus size={13} /> {commentSel.anchor === null ? 'Too long to comment' : 'Comment'}
+          <MessageSquarePlus size={13} /> {commentSel.anchor === null ? t('apps.inkwell.editor.pill_too_long') : t('apps.inkwell.editor.pill_comment')}
         </button>
       )}
     </div>

@@ -14,6 +14,7 @@
 // guard engages with no app change.
 
 import type { Artifact } from '../../types'
+import { i18nT } from '../../i18n/t'
 
 /** The tag that marks an artifact as a Inkwell document. */
 export const INKWELL_TAG = 'inkwell'
@@ -60,7 +61,7 @@ export async function saveDoc(
   })
   if (res.status === 409) {
     let currentSha: string | null = null
-    let detail = 'Document changed on the server'
+    let detail = i18nT('apps.inkwell.api.doc_changed_on_server')
     try {
       const j = (await res.json()) as { error?: string; current_sha256?: string }
       currentSha = j.current_sha256 ?? null
