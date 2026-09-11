@@ -65,6 +65,7 @@ export const BUILTIN_COMPONENT_REGISTRY: Record<string, BuiltinAppEntry> = {
   '/crew-companion': { component: lazy(() => import('./crew-companion/CrewCompanionPage')), appId: 'crew-companion' },
   '/projects': { component: lazy(() => import('../pages/ProjectsPage')), appId: 'projects' },
   '/md-notebook': { component: lazy(() => import('./md-notebook/MdNotebookPage')), appId: 'md-notebook' },
+  '/inkwell': { component: lazy(() => import('./inkwell/InkwellPage')), appId: 'inkwell' },
   '/mochi': { component: lazy(() => import('./mochi/MochiPage')), appId: 'mochi' },
   '/spec-builder': { component: lazy(() => import('./spec-builder/SpecBuilderPage')), appId: 'spec-builder' },
   '/personal-shopper': { component: lazy(() => import('./personal-shopper/PersonalShopperPage')), appId: 'personal-shopper' },
