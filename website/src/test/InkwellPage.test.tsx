@@ -370,6 +370,47 @@ describe('nudge coalescing', () => {
   })
 })
 
+describe('leaving a document (sweep regressions, 2026-09-10)', () => {
+  const DOC_B = { ...DOC, slug: 'other', name: 'other', content: '# other\n\nbeta.\n', content_sha256: 'sha-b' }
+
+  beforeEach(() => {
+    apiMock.artifacts.mockResolvedValue({ artifacts: [DOC, DOC_B] })
+    apiMock.artifact.mockImplementation(async (slug: string) => (slug === 'other' ? DOC_B : DOC))
+    apiMock.postArtifactComment.mockResolvedValue({})
+    apiMock.createChatSlot.mockResolvedValue({ key: 'chat-9', title: 'Inkwell: notes' })
+    apiMock.chatSlotContext.mockResolvedValue({})
+    apiMock.sendChat.mockResolvedValue({ ok: true })
+  })
+
+  it('typing then switching docs inside the debounce still saves the outgoing doc', async () => {
+    await openDoc()
+    fireEvent.click(screen.getByText('stub-type')) // arms the 800 ms debounce on 'notes'
+    expect(saveDocMock).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'other' })) // switch at t≈0
+    await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    expect(saveDocMock).toHaveBeenCalledTimes(1)
+    expect(saveDocMock.mock.calls[0][0]).toBe('notes') // the OUTGOING doc, not 'other'
+    // The new doc is open and clean — no phantom save of just-loaded content.
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(saveDocMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a nudge pending on doc A fires for A on switch and is not re-fired by B', async () => {
+    await openDoc()
+    fireEvent.click(screen.getByText('stub-select'))
+    fireEvent.change(screen.getByLabelText('Comment for the co-author'), { target: { value: 'hi' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Comment & notify' }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(50) })
+    expect(apiMock.postArtifactComment).toHaveBeenCalledTimes(1)
+    expect(apiMock.sendChat).not.toHaveBeenCalled() // inside the 1.5 s coalescer
+    fireEvent.click(screen.getByRole('button', { name: 'other' }))
+    await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    expect(apiMock.sendChat).toHaveBeenCalledTimes(1) // flushed for A on leave
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+    expect(apiMock.sendChat).toHaveBeenCalledTimes(1) // nothing pending for B
+  })
+})
+
 describe('interleaved-edit merge (phase 4)', () => {
   it('409 → clean 3-way merge adopts, banners, and re-saves the merged text', async () => {
     // Disjoint regions: the user edits the 'omega' line (stub-type); the

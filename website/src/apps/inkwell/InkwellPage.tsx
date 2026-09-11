@@ -150,8 +150,10 @@ export default function InkwellPage() {
 
   useEffect(() => { void refreshDocs() }, [refreshDocs])
 
+  const leaveDocRef = useRef<(() => Promise<void>) | null>(null)
   const openDoc = useCallback(async (slug: string) => {
     try {
+      if (docRef.current && docRef.current.slug !== slug) await leaveDocRef.current?.()
       const d = (await api.artifact(slug)) as InkwellDoc
       setDoc(d)
       setBuffer(d.content ?? '')
@@ -345,10 +347,12 @@ export default function InkwellPage() {
   // nothing open. Rules: trailing debounce while idle; while the co-author is
   // busy, just flag — the busy→idle effect fires ONE catch-up nudge.
   const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const nudgePendingRef = useRef(false)
+  // Keyed by slug: a nudge pending for doc A must never be consumed by B's
+  // busy→idle transition after a fast switch (sweep finding, 2026-09-10).
+  const nudgePendingRef = useRef<string | null>(null)
   const NUDGE_DEBOUNCE_MS = 1500
   const fireNudge = useCallback(async () => {
-    nudgePendingRef.current = false
+    nudgePendingRef.current = null
     const key = slotKey ?? await startSession()
     if (!key) return
     const msg =
@@ -368,14 +372,26 @@ export default function InkwellPage() {
     }
   }, [slotKey, startSession])
   const scheduleNudge = useCallback(() => {
-    nudgePendingRef.current = true
+    const slug = docRef.current?.slug ?? null
+    nudgePendingRef.current = slug
     if (busyRef.current) return // the busy→idle effect will fire it
     if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current)
     nudgeTimerRef.current = setTimeout(() => {
       nudgeTimerRef.current = null
-      if (nudgePendingRef.current && !busyRef.current) void fireNudge()
+      if (nudgePendingRef.current !== null && nudgePendingRef.current === docRef.current?.slug && !busyRef.current) void fireNudge()
     }, NUDGE_DEBOUNCE_MS)
   }, [fireNudge])
+
+  // Leaving a document: collapse its pending autosave and nudge NOW, while
+  // docRef/slotKey still point at it. Without this, openDoc's state swap ran
+  // first, the [doc?.slug] cleanup then saw dirty=false and cleared the timer,
+  // and the last <800 ms of typing was lost (sweep finding, 2026-09-10).
+  leaveDocRef.current = async () => {
+    if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null }
+    if (dirtyRef.current) await flushSave(false)
+    if (nudgeTimerRef.current) { clearTimeout(nudgeTimerRef.current); nudgeTimerRef.current = null }
+    if (nudgePendingRef.current !== null && nudgePendingRef.current === docRef.current?.slug) await fireNudge()
+  }
   const prevBusyRef = useRef(false)
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
@@ -426,7 +442,7 @@ export default function InkwellPage() {
         // The turn may have replied to / advanced threads: refresh them.
         void fetchThreads(doc.slug)
         // Comments posted DURING the turn were held; one catch-up nudge now.
-        if (nudgePendingRef.current) scheduleNudge()
+        if (nudgePendingRef.current === doc.slug) scheduleNudge()
       } catch {
         // A refresh failure is not worth a banner: the next autosave recovers,
         // and surfacing it would blame the user for the agent's turn.
