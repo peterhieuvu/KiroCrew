@@ -10,7 +10,7 @@ calls. A document can be file-backed (`source_path`), in which case the store
 writes through to the real `.md` file on disk, keeping it portable, diffable,
 and readable by any editor.
 
-The co-author panel is a real KiroCrew chat session bound to the artifact, so
+The co-author panel is a real Kiro Crew chat session bound to the artifact, so
 the agent brings the user's memory, knowledge library, and codebase context to
 the draft, edits the document with the globally-mounted artifact tools, and
 the editor picks the change up when the turn finishes — without discarding the
@@ -91,9 +91,11 @@ All under `website/src/apps/inkwell/`:
   (quote + 48 chars of prefix/suffix + offsets) on that same index, so a
   comment on the last of four identical lines resolves to the last line.
   Context scoring collapses whitespace but does not trim — the boundary
-  space between prefix and quote is load-bearing. With no recorded offset
-  the earliest hit is only the final stable tiebreak, never a bias toward
-  the top of the document (legacy quote-only anchors keep their behaviour).
+  space between prefix and quote is load-bearing. A legacy quote-only anchor
+  (no context, no offset) on repeated text still resolves to the EARLIEST
+  occurrence — the only stable choice without context, and yes, a
+  top-of-document bias; new anchors always carry context so it never applies
+  to them.
 - `commentHighlights.ts` — ProseMirror decoration plugin: rebuilt when the
   page pushes freshly-resolved threads, mapped natively through user typing
   between pushes; clicks surface the thread id.
