@@ -69,6 +69,16 @@ All under `website/src/apps/inkwell/`:
   if anything was posted mid-turn. Rationale: a send into a running slot is
   QUEUED by the server as a whole extra turn, so N quick comments would cost
   N turns with the later ones finding nothing open.
+- `extensions.ts` — the editor's schema in one place (StarterKit + Markdown +
+  TaskList/TaskItem + TableKit), shared by the editor, the tests and the
+  lossy-load guard, because what survives a round-trip is a property of the
+  extension set.
+- `roundTrip.ts` — lossy-load guard: parses the loaded source with that
+  schema, serializes it back, and compares word multisets (syntax stripped).
+  Formatting drift is fine; missing words or HTML comments make the doc
+  open read-only behind a banner with autosave held until the user accepts
+  the loss ("Edit anyway") or opens the raw artifact. Added after the sweep
+  found tables deleted on the first keystroke.
 - `RichMarkdownEditor.tsx` — Tiptap (open core, exact pins) WYSIWYG with
   markdown IO. External changes arrive via `setContent(..., emitUpdate:
   false)` so they never dirty the buffer; `setEditable(..., false)` for the

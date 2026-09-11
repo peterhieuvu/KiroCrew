@@ -47,8 +47,9 @@ const applySuggestionMock = vi.hoisted(() => vi.fn().mockReturnValue(true))
 vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
   const React = await import('react')
   return {
-    default: React.forwardRef(function Stub({ value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick, onCaretContext }: {
+    default: React.forwardRef(function Stub({ value, onChange, onComment, commentThreads, onThreadsResolved, onThreadClick, onCaretContext, disabled }: {
       value: string
+      disabled?: boolean
       onChange: (md: string) => void
       onComment?: (a: { quote: string }, at: { x: number; y: number }) => void
       commentThreads?: { id: string }[]
@@ -72,6 +73,7 @@ vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
           <button type="button" onClick={() => onCaretContext?.({ blockIndex: 0, selection: null, threadId: 't1' })}>stub-caret-in-t1</button>
           <button type="button" onClick={() => onCaretContext?.({ blockIndex: 0, selection: 'some words', threadId: null })}>stub-range-select</button>
           <span data-testid="thread-count">{commentThreads?.length ?? 0}</span>
+          <span data-testid="stub-disabled">{disabled ? 'yes' : 'no'}</span>
         </div>
       )
     }),
@@ -112,6 +114,31 @@ async function openDoc() {
   fireEvent.click(await screen.findByRole('button', { name: 'notes' }))
   await act(async () => { await vi.runOnlyPendingTimersAsync() })
 }
+
+describe('lossy-load guard', () => {
+  it('a doc the editor cannot preserve opens read-only, autosave is held, and Edit-anyway releases it', async () => {
+    apiMock.artifact.mockResolvedValue({ ...DOC, content: '# doc\n\n<!-- keep me -->\n\nalpha line.\n' })
+    await openDoc()
+    expect(screen.getByTestId('inkwell-lossy-banner')).toHaveTextContent('1 HTML comment')
+    expect(screen.getByTestId('stub-disabled').textContent).toBe('yes')
+    // Even if an edit slipped through, the save is held.
+    fireEvent.click(screen.getByText('stub-type'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(saveDocMock).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId('inkwell-lossy-accept'))
+    expect(screen.queryByTestId('inkwell-lossy-banner')).not.toBeInTheDocument()
+    expect(screen.getByTestId('stub-disabled').textContent).toBe('no')
+    fireEvent.click(screen.getByText('stub-type'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(saveDocMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a preservable doc shows no banner and is editable', async () => {
+    await openDoc()
+    expect(screen.queryByTestId('inkwell-lossy-banner')).not.toBeInTheDocument()
+    expect(screen.getByTestId('stub-disabled').textContent).toBe('no')
+  })
+})
 
 describe('autosave', () => {
   it('debounces edits into one snapshot:false save carrying the held token', async () => {

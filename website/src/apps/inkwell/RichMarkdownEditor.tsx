@@ -23,8 +23,7 @@
  */
 import { useEffect, useImperativeHandle, useReducer, useRef, useState, forwardRef } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import { Markdown } from '@tiptap/markdown'
+import { contentExtensions } from './extensions'
 import {
   Bold, Code, Heading1, Heading2, Heading3, Italic, Link2, List, ListOrdered,
   MessageSquarePlus, Minus, Redo2, SquareCode, Strikethrough, TextQuote, Undo2,
@@ -95,10 +94,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
 
   const editor = useEditor({
     extensions: [
-      // openOnClick off: a click in an editable surface places the caret; the
-      // toolbar link button is the navigation affordance.
-      StarterKit.configure({ link: { openOnClick: false } }),
-      Markdown,
+      ...contentExtensions(),
       CommentHighlights.configure({
         onThreadClick: (id: string) => onThreadClickRef.current?.(id),
       }),

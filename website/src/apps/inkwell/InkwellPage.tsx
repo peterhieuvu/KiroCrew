@@ -40,6 +40,7 @@ import { threeWayMerge } from './merge'
 import ContextRail from './ContextRail'
 import ThreadPopover from './ThreadPopover'
 import NewDocPopover from './NewDocPopover'
+import { roundTripLoss, type RoundTripLoss } from './roundTrip'
 
 /** Map a top-level block index to its markdown source line. Blocks in the
  *  app's own serialization are separated by blank lines, so the Nth block
@@ -82,6 +83,12 @@ export default function InkwellPage() {
   // Phase-4 info signal: a clean 3-way merge folded the co-author's changes
   // into the user's draft. Cleared on the next successful save or doc open.
   const [merged, setMerged] = useState(false)
+  // Lossy-load guard (adversarial sweep, 2026-09-10): if the WYSIWYG round-trip
+  // of the loaded document would DROP content (tables before the table node
+  // existed; HTML comments still), the editor opens read-only behind a banner
+  // and autosave is held until the user explicitly accepts the loss.
+  const [loss, setLoss] = useState<RoundTripLoss | null>(null)
+  const [lossAck, setLossAck] = useState(false)
   const [chatOpen, setChatOpen] = useState(true)
   const [slotCreating, setSlotCreating] = useState(false)
 
@@ -154,6 +161,9 @@ export default function InkwellPage() {
       setError(null)
       setMerged(false)
       setFocusThread(null)
+      const l = roundTripLoss(d.content ?? '')
+      setLoss(l.lossy ? l : null)
+      setLossAck(false)
       void fetchThreads(slug)
       // No session lookup: `slotKey` derives from the Redux slot list via the
       // slot's own `artifact` binding, which the WS slots event keeps fresh.
@@ -190,10 +200,14 @@ export default function InkwellPage() {
   docRef.current = doc
   const savingRef = useRef(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lossHoldRef = useRef(false)
+  lossHoldRef.current = !!loss && !lossAck
 
   const flushSave = useCallback(async (snapshot = false): Promise<boolean> => {
     const d = docRef.current
     if (!d || savingRef.current) return false
+    // Held: the round-trip would drop content the user has not accepted losing.
+    if (lossHoldRef.current) return false
     savingRef.current = true
     setSaving(true)
     const content = bufferRef.current
@@ -674,6 +688,34 @@ export default function InkwellPage() {
             <MessageSquareText className="lucide-inline" /> Co-author
           </button>
         </div>
+        {loss && !lossAck && (
+          <div
+            role="alert"
+            data-testid="inkwell-lossy-banner"
+            className="px-3 py-2 text-[12px] border-b border-warning/40 bg-warning/10 text-text shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1"
+          >
+            <span>
+              This document contains markdown the editor cannot preserve
+              {loss.htmlComments > 0 && ` — ${loss.htmlComments} HTML comment${loss.htmlComments === 1 ? '' : 's'}`}
+              {loss.missingWords.length > 0 && ` — text: “${loss.missingWords.slice(0, 6).join(' ')}${loss.missingWords.length > 6 ? ' …' : ''}”`}
+              . Editing here would drop it, so the editor is read-only.
+            </span>
+            <button
+              type="button"
+              onClick={() => setLossAck(true)}
+              className="rounded-md border border-border bg-bg-elevated px-2 py-0.5 text-[12px] text-text hover:bg-bg-hover cursor-pointer"
+              data-testid="inkwell-lossy-accept"
+            >
+              Edit anyway (drop it)
+            </button>
+            <a
+              href={`/artifacts/${encodeURIComponent(doc?.slug ?? '')}`}
+              className="text-[12px] underline text-muted hover:text-text"
+            >
+              Open raw in Artifacts
+            </a>
+          </div>
+        )}
         {error && (
           <div className="px-3 py-1 text-[12px] text-danger border-b border-border shrink-0">{error}</div>
         )}
@@ -693,6 +735,7 @@ export default function InkwellPage() {
               onThreadsResolved={setOrphanedLocal}
               onThreadClick={setFocusThread}
               onCaretContext={setCaretCtx}
+              disabled={!!loss && !lossAck}
             />
           ) : (
             <div className="h-full flex items-center justify-center text-[13px] text-muted">

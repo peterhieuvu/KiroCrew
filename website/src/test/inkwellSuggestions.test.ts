@@ -4,13 +4,12 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Editor } from '@tiptap/core'
-import StarterKit from '@tiptap/starter-kit'
-import { Markdown } from '@tiptap/markdown'
+import { contentExtensions } from '../apps/inkwell/extensions'
 import { parseSuggestion, applySuggestion } from '../apps/inkwell/suggestions'
 
 function makeEditor(markdown: string): Editor {
   return new Editor({
-    extensions: [StarterKit.configure({ link: { openOnClick: false } }), Markdown],
+    extensions: contentExtensions(),
     content: markdown,
     contentType: 'markdown',
   })
