@@ -739,10 +739,13 @@ export default function InkwellPage() {
             className="px-3 py-2 text-[12px] border-b border-warning/40 bg-warning/10 text-text shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1"
           >
             <span>
-              {t('apps.inkwell.page.lossy_intro')}
-              {loss.htmlComments > 0 && ` — ${t('apps.inkwell.page.lossy_html_comments', { count: loss.htmlComments })}`}
-              {loss.missingWords.length > 0 && ` — ${t('apps.inkwell.page.lossy_text', { words: `${loss.missingWords.slice(0, 6).join(' ')}${loss.missingWords.length > 6 ? ' …' : ''}` })}`}
-              {t('apps.inkwell.page.lossy_outro')}
+              {[
+                t('apps.inkwell.page.lossy_intro'),
+                loss.htmlComments > 0 ? t('apps.inkwell.page.lossy_html_comments', { count: loss.htmlComments }) : null,
+                loss.missingWords.length > 0
+                  ? t('apps.inkwell.page.lossy_text', { words: `${loss.missingWords.slice(0, 6).join(' ')}${loss.missingWords.length > 6 ? ' …' : ''}` })
+                  : null,
+              ].filter(Boolean).join(' ')}
             </span>
             <button
               type="button"
