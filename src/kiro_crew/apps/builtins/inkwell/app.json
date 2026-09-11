@@ -1,0 +1,58 @@
+{
+  "name": "inkwell",
+  "version": "0.1.0",
+  "displayName": "Inkwell",
+  "description": "Write markdown documents beside an agent co-author. The co-author panel is a real Kiro Crew chat session scoped to the document, so the agent brings your memory, knowledge library, and codebase context to the draft — and can edit the document while you watch it update.",
+  "author": "pevu",
+  "license": "Apache-2.0",
+  "tags": [
+    "markdown",
+    "writing",
+    "documents",
+    "co-author"
+  ],
+  "highlights": [
+    "Rich markdown editor with autosave — versions snapshot on demand",
+    "AI co-author chat scoped to the document — a full Kiro Crew session with your memory and tools",
+    "Highlight a passage to anchor a comment; the co-author addresses it and marks it for your review",
+    "Documents are artifacts, optionally backed by a real .md file on disk — portable, diffable, readable by any editor"
+  ],
+  "defaultEnabled": false,
+  "permissions": {
+    "api": [
+      "/api/chat",
+      "/api/chat/*",
+      "/api/artifacts",
+      "/api/artifacts/*",
+      "/api/knowledge/search-for-context",
+      "/api/memory/semantic"
+    ],
+    "storage": true
+  },
+  "ui": {
+    "pages": [
+      {
+        "route": "/inkwell",
+        "label": "Inkwell",
+        "icon": "PenLine"
+      }
+    ]
+  },
+  "platform": {
+    "os": [
+      "macos",
+      "linux",
+      "windows"
+    ]
+  },
+  "iconUrl": "/app-assets/inkwell/icon.svg",
+  "screenshots": [
+    "/app-assets/inkwell/screenshot-main.png"
+  ],
+  "useCases": [
+    "Draft a design doc or notes in markdown while a document-scoped agent supplies implementation details from your codebase and research from your memory."
+  ],
+  "configuration": [
+    "Enable the app, create a document, and start a co-author session from the panel — documents are stored as markdown artifacts, optionally backed by a file path you choose."
+  ]
+}
