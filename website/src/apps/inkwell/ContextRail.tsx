@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, Brain, RefreshCw } from 'lucide-react'
 import { api } from '../../api/client'
+import type { CaretHeadings } from './headings'
 
 const RAIL_DEBOUNCE_MS = 600
 const MAX_KNOWLEDGE = 5
@@ -40,20 +41,15 @@ export function extractQueryTerms(text: string, max = 8): string[] {
 
 /** The document's current subject: H1 + the nearest heading above the
  *  caret line, or the whole first 400 chars when there are no headings. */
-export function deriveQuery(markdown: string, caretLine: number | null, selection: string | null): string {
+export function deriveQuery(markdown: string, caret: CaretHeadings | null, selection: string | null): string {
   if (selection && selection.trim().length >= 8) return selection.trim().slice(0, 300)
-  const lines = markdown.split('\n')
-  const headings: { line: number; text: string }[] = []
-  lines.forEach((l, i) => {
-    const m = /^(#{1,6})\s+(.*)$/.exec(l)
-    if (m) headings.push({ line: i, text: m[2].trim() })
-  })
-  if (headings.length === 0) return markdown.slice(0, 400)
-  const h1 = headings.find(h => /^#\s/.test(lines[h.line]))?.text ?? headings[0].text
-  const nearest = caretLine == null
-    ? null
-    : [...headings].reverse().find(h => h.line <= caretLine)?.text ?? null
-  return nearest && nearest !== h1 ? `${h1} ${nearest}` : h1
+  // Headings come from the editor's document model (see headings.ts), never
+  // from re-parsing markdown text: line counting desynced on multi-line blocks.
+  const h1 = caret?.h1 ?? null
+  const nearest = caret?.nearest ?? null
+  if (!h1 && !nearest) return markdown.slice(0, 400)
+  const top = h1 ?? nearest!
+  return nearest && nearest !== top ? `${top} ${nearest}` : top
 }
 
 interface KnowledgeCard {
@@ -85,12 +81,12 @@ export function rankMemory(entries: MemoryEntry[], terms: string[], max = MAX_ME
 
 interface Props {
   markdown: string
-  caretLine: number | null
+  caret: CaretHeadings | null
   selection: string | null
   onClose: () => void
 }
 
-export default function ContextRail({ markdown, caretLine, selection, onClose }: Props) {
+export default function ContextRail({ markdown, caret, selection, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [knowledge, setKnowledge] = useState<KnowledgeCard[]>([])
   const [memory, setMemory] = useState<MemoryEntry[]>([])
@@ -101,7 +97,7 @@ export default function ContextRail({ markdown, caretLine, selection, onClose }:
   const memoryCacheRef = useRef<MemoryEntry[] | null>(null)
 
   useEffect(() => {
-    const q = deriveQuery(markdown, caretLine, selection)
+    const q = deriveQuery(markdown, caret, selection)
     const timer = setTimeout(() => {
       if (!q.trim()) return
       setQuery(q)
@@ -129,7 +125,7 @@ export default function ContextRail({ markdown, caretLine, selection, onClose }:
       })()
     }, RAIL_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [markdown, caretLine, selection])
+  }, [markdown, caret?.h1, caret?.nearest, selection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <aside className="w-[300px] shrink-0 border-l border-border bg-card flex flex-col min-h-0" aria-label="Context rail" data-testid="inkwell-context-rail">

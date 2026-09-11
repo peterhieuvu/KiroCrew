@@ -48,12 +48,17 @@ function buildDecorations(highlights: ThreadHighlight[], docSize: number): Decor
 export function liveThreadRanges(state: EditorState): Array<{ id: string; status: string; from: number; to: number }> {
   const set = commentHighlightsKey.getState(state)
   if (!set) return []
+  // Clamp: decorations are MAPPED through edits between pushes, and a large
+  // deletion can leave one past the new document end until the next push —
+  // coordsAtPos on such a position throws in the gutter render (sweep
+  // finding, 2026-09-10). Degenerate (empty) ranges are dropped.
+  const size = state.doc.content.size
   return set.find().map(d => ({
     id: String((d.spec as { threadId?: string }).threadId ?? ''),
     status: String((d.spec as { status?: string }).status ?? 'open'),
-    from: d.from,
-    to: d.to,
-  })).filter(r => r.id)
+    from: Math.min(d.from, size),
+    to: Math.min(d.to, size),
+  })).filter(r => r.id && r.to > r.from)
 }
 
 /** Thread id whose live range contains `pos`, or null. */

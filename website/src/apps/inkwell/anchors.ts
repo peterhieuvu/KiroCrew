@@ -173,10 +173,14 @@ export function anchorForSelection(doc: PMNode, from: number, quote: string): Co
 export const ANCHOR_CONTEXT_CHARS = 48
 
 /** Resolve one anchor against a doc. Returns null when orphaned. */
-export function resolveAnchor(doc: PMNode, anchor: CommentAnchor): ResolvedAnchor | null {
+export function resolveAnchor(
+  doc: PMNode,
+  anchor: CommentAnchor,
+  index: { text: string; positions: number[] } = buildTextIndex(doc),
+): ResolvedAnchor | null {
   const quote = normalizeQuote(anchor.quote ?? '')
   if (!quote) return null
-  const { text, positions } = buildTextIndex(doc)
+  const { text, positions } = index
 
   const hits = findAll(text, quote)
   if (hits.length === 0) return null
@@ -269,9 +273,12 @@ export function resolveThreads(
 ): { highlights: ThreadHighlight[]; orphanedIds: string[] } {
   const highlights: ThreadHighlight[] = []
   const orphanedIds: string[] = []
+  // One index for all threads: resolveAnchor rebuilt it per thread, which is
+  // O(threads × docSize) — fine for a handful, wasteful for hundreds.
+  const index = buildTextIndex(doc)
   for (const c of comments) {
     if (c.parent_id || !c.anchor) continue
-    const r = resolveAnchor(doc, c.anchor)
+    const r = resolveAnchor(doc, c.anchor, index)
     if (r) highlights.push({ id: c.id, status: c.status, from: r.from, to: r.to })
     else orphanedIds.push(c.id)
   }

@@ -87,4 +87,10 @@ describe('threeWayMerge', () => {
     expect(r.clean).toBe(true)
     expect(r.merged.split('\n')).toEqual(['z', 'b', 'c'])
   })
+
+  it('theirs deletes the tail to empty while ours edits the head: no phantom blank line (sweep 2026-09-10)', () => {
+    const r = threeWayMerge('# T\n\nintro\n\ntail para\n', '# Title\n\nintro\n\ntail para\n', '# T\n\nintro\n')
+    expect(r.clean).toBe(true)
+    expect(r.merged).toBe('# Title\n\nintro\n')
+  })
 })

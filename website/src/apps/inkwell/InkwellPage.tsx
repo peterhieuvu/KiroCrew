@@ -42,22 +42,8 @@ import ThreadPopover from './ThreadPopover'
 import NewDocPopover from './NewDocPopover'
 import { roundTripLoss, type RoundTripLoss } from './roundTrip'
 import { useClampedPosition } from './useClampedPosition'
+import type { CaretHeadings } from './headings'
 
-/** Map a top-level block index to its markdown source line. Blocks in the
- *  app's own serialization are separated by blank lines, so the Nth block
- *  starts at the Nth non-empty run — good enough to pick the nearest
- *  heading for the context rail's query. */
-export function blockIndexToLine(markdown: string, blockIndex: number): number {
-  const lines = markdown.split('\n')
-  let block = -1
-  let inBlock = false
-  for (let i = 0; i < lines.length; i++) {
-    const nonEmpty = lines[i].trim().length > 0
-    if (nonEmpty && !inBlock) { block += 1; inBlock = true; if (block === blockIndex) return i }
-    if (!nonEmpty) inBlock = false
-  }
-  return Math.max(0, lines.length - 1)
-}
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -95,7 +81,9 @@ export default function InkwellPage() {
 
   // ── Context rail (phase 5) ────────────────────────────────────────────────
   const [railOpen, setRailOpen] = useState(false)
-  const [caretCtx, setCaretCtx] = useState<{ blockIndex: number; selection: string | null; threadId: string | null }>({ blockIndex: 0, selection: null, threadId: null })
+  const [caretCtx, setCaretCtx] = useState<{
+    blockIndex: number; headings: CaretHeadings; selection: string | null; threadId: string | null
+  }>({ blockIndex: 0, headings: { h1: null, nearest: null }, selection: null, threadId: null })
 
   // ── Comment threads ───────────────────────────────────────────────────────
   // Fetched with the doc, refetched when the co-author turn ends and after a
@@ -888,7 +876,7 @@ export default function InkwellPage() {
       {railOpen && doc && (
         <ContextRail
           markdown={buffer}
-          caretLine={blockIndexToLine(buffer, caretCtx.blockIndex)}
+          caret={caretCtx.headings}
           selection={caretCtx.selection}
           onClose={() => setRailOpen(false)}
         />

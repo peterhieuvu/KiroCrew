@@ -32,6 +32,7 @@ import { IconButton } from '../../components/ui'
 import { anchorForSelection, resolveThreads, snapToWordBounds, type CommentThread, type CommentAnchor } from './anchors'
 import { CommentHighlights, commentHighlightsKey, liveThreadRanges, threadAtPos } from './commentHighlights'
 import { applySuggestion } from './suggestions'
+import { headingContext, type CaretHeadings } from './headings'
 import './richEditor.css'
 
 interface Props {
@@ -57,7 +58,7 @@ interface Props {
    *  top-level block index, the current selection text (or null), and the
    *  id of the comment thread whose live range contains the caret (or null
    *  — the popover closes when the caret leaves a highlight). */
-  onCaretContext?: (ctx: { blockIndex: number; selection: string | null; threadId: string | null }) => void
+  onCaretContext?: (ctx: { blockIndex: number; headings: CaretHeadings; selection: string | null; threadId: string | null }) => void
   disabled?: boolean
 }
 
@@ -137,7 +138,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
       const selection = from === to ? null : editor.state.doc.textBetween(from, to, ' ')
       // Caret inside a highlight → that thread; the page opens its popover.
       const threadId = from === to ? threadAtPos(editor.state, from) : null
-      fn({ blockIndex, selection, threadId })
+      fn({ blockIndex, headings: headingContext(editor.state.doc, blockIndex), selection, threadId })
     }
     editor.on('selectionUpdate', handler)
     return () => { editor.off('selectionUpdate', handler) }
@@ -146,7 +147,8 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
   // Apply external value changes without emitting an update (no dirty flag,
   // no onChange echo loop).
   // Comment pill state (settled on mouseup/keyup; see settleSelection).
-  const [commentSel, setCommentSel] = useState<{ anchor: CommentAnchor; x: number; y: number } | null>(null)
+  // anchor === null: selection too long to anchor; the pill renders disabled.
+  const [commentSel, setCommentSel] = useState<{ anchor: CommentAnchor | null; x: number; y: number } | null>(null)
   useEffect(() => {
     if (!editor || value === lastEmittedRef.current) return
     lastEmittedRef.current = value
@@ -222,9 +224,24 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
       setCommentSel(null)
       return
     }
+    // Over-long selections are refused, not truncated: a truncated quote
+    // highlighted (and on Accept, replaced) a SHORTER span than the user
+    // selected (sweep finding, 2026-09-10). The pill still appears, disabled
+    // with the reason, so the limit is discoverable.
+    if (quote.length > MAX_QUOTE_LEN) {
+      const host = wrapRef.current?.getBoundingClientRect()
+      if (!host) return
+      const coords = editor.view.coordsAtPos(to)
+      setCommentSel({
+        anchor: null,
+        x: Math.min(coords.left - host.left, host.width - 96),
+        y: coords.bottom - host.top + 6,
+      })
+      return
+    }
     // Full anchor (prefix/suffix/offsets) so a repeated passage resolves to
     // THIS occurrence, not the first one in the document.
-    const anchor = anchorForSelection(editor.state.doc, from, quote.slice(0, MAX_QUOTE_LEN))
+    const anchor = anchorForSelection(editor.state.doc, from, quote)
     if (!anchor) {
       setCommentSel(null)
       return
@@ -327,18 +344,21 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
         <button
           type="button"
           data-testid="inkwell-comment-pill"
-          className="absolute z-10 inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text shadow-md hover:bg-bg-hover cursor-pointer transition-colors"
+          disabled={commentSel.anchor === null}
+          title={commentSel.anchor === null ? `Selection too long to comment on (limit ${MAX_QUOTE_LEN} characters) — select a shorter passage` : undefined}
+          className="absolute z-10 inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-2 py-1 text-[12px] text-text shadow-md hover:bg-bg-hover cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           style={{ left: commentSel.x, top: commentSel.y }}
           // onMouseDown, not onClick: a click would first blur the editor,
           // collapse the selection, and re-settle the pill away mid-press.
           onMouseDown={e => {
             e.preventDefault()
             const anchor = commentSel.anchor
+            if (!anchor) return
             setCommentSel(null)
             onComment?.(anchor, { x: commentSel.x, y: commentSel.y })
           }}
         >
-          <MessageSquarePlus size={13} /> Comment
+          <MessageSquarePlus size={13} /> {commentSel.anchor === null ? 'Too long to comment' : 'Comment'}
         </button>
       )}
     </div>

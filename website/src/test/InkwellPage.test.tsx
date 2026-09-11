@@ -56,7 +56,7 @@ vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
       commentThreads?: { id: string }[]
       onThreadsResolved?: (ids: string[]) => void
       onThreadClick?: (id: string) => void
-      onCaretContext?: (c: { blockIndex: number; selection: string | null; threadId: string | null }) => void
+      onCaretContext?: (c: { blockIndex: number; headings: { h1: string | null; nearest: string | null }; selection: string | null; threadId: string | null }) => void
     }, ref: React.Ref<unknown>) {
       React.useImperativeHandle(ref, () => ({
         applySuggestion: applySuggestionMock,
@@ -72,8 +72,8 @@ vi.mock('../apps/inkwell/RichMarkdownEditor', async () => {
           {commentThreads?.map(t => (
             <button key={t.id} type="button" onClick={() => onThreadClick?.(t.id)}>{`stub-open-${t.id}`}</button>
           ))}
-          <button type="button" onClick={() => onCaretContext?.({ blockIndex: 0, selection: null, threadId: 't1' })}>stub-caret-in-t1</button>
-          <button type="button" onClick={() => onCaretContext?.({ blockIndex: 0, selection: 'some words', threadId: null })}>stub-range-select</button>
+          <button type="button" onClick={() => onCaretContext?.({ blockIndex: 0, headings: { h1: null, nearest: null }, selection: null, threadId: 't1' })}>stub-caret-in-t1</button>
+          <button type="button" onClick={() => onCaretContext?.({ blockIndex: 0, headings: { h1: null, nearest: null }, selection: 'some words', threadId: null })}>stub-range-select</button>
           <span data-testid="thread-count">{commentThreads?.length ?? 0}</span>
           <span data-testid="stub-disabled">{disabled ? 'yes' : 'no'}</span>
         </div>

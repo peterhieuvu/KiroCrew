@@ -43,7 +43,11 @@ function hunksAgainstBase(base: string, side: string): Hunk[] {
   for (const p of parts) {
     const lineCount = p.count ?? splitLines(p.value.replace(/\n$/, '')).length
     if (p.added) {
-      const lines = splitLines(p.value.replace(/\n$/, ''))
+      // A pure "\n" added part is jsdiff's way of saying "the side ended here"
+      // when the other side deleted down to empty; it inserts NOTHING. Splitting
+      // it would yield [''] — a phantom blank line (sweep finding, 2026-09-10).
+      const body = p.value.replace(/\n$/, '')
+      const lines = body === '' && p.value.length <= 1 ? [] : splitLines(body)
       if (pending) pending.lines.push(...lines)
       else pending = { start: baseLine, baseLen: 0, lines }
     } else if (p.removed) {

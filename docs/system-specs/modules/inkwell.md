@@ -107,7 +107,9 @@ All under `website/src/apps/inkwell/`:
   Accept/reject sit on the human-only resolve path by construction (surfaced in the thread popover).
 - `ContextRail.tsx` — the synchronous context rail (phase 5): "what did we
   decide about X" answered with no agent turn. Derives a query from the
-  document (selection, else H1 + the heading nearest the caret), then reads
+  document (selection, else H1 + the heading nearest the caret — both read
+  from the ProseMirror document by `headings.ts`, not re-derived from
+  markdown line counts, which desynced on fenced code and blockquotes), then reads
   `GET /api/knowledge/search-for-context` for citation cards and
   `GET /api/memory/semantic` (fetched once per mount, filtered client-side
   by query terms — the same approach as the dashboard's own memory card;

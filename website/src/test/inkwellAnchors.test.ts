@@ -261,4 +261,25 @@ describe('resolveThreads', () => {
     expect(orphanedIds).toEqual(['b'])
     e.destroy()
   })
+
+  it('liveThreadRanges clamps mapped decorations after a deletion shrinks the doc (sweep 2026-09-10)', async () => {
+    const { CommentHighlights, commentHighlightsKey, liveThreadRanges } = await import('../apps/inkwell/commentHighlights')
+    const e = new Editor({
+      extensions: [...contentExtensions(), CommentHighlights.configure({ onThreadClick: () => undefined })],
+      content: '# T\n\nfirst\n\nsecond long paragraph here\n\nthird\n',
+      contentType: 'markdown',
+    })
+    const { highlights } = resolveThreads(e.state.doc, [{ id: 'a', body: 'x', status: 'open', anchor: { quote: 'third' } }])
+    e.view.dispatch(e.state.tr.setMeta(commentHighlightsKey, highlights))
+    // Delete everything from the middle of paragraph 2 to the end.
+    e.view.dispatch(e.state.tr.delete(12, e.state.doc.content.size))
+    const size = e.state.doc.content.size
+    for (const r of liveThreadRanges(e.state)) {
+      expect(r.from).toBeLessThanOrEqual(size)
+      expect(r.to).toBeLessThanOrEqual(size)
+      expect(r.to).toBeGreaterThan(r.from)
+      expect(() => e.view.coordsAtPos(r.from)).not.toThrow()
+    }
+    e.destroy()
+  })
 })
