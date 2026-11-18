@@ -84,10 +84,10 @@ export default function ThreadPopover({
       <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border shrink-0">
         <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
           root.status === 'resolved' ? 'bg-bg-hover text-muted'
-            : root.status === 'review' ? 'bg-success/15 text-success' : 'bg-accent/15 text-accent'
+            : root.status === 'review' ? 'bg-ok/15 text-ok-text' : 'bg-accent/15 text-accent'
         }`}>{root.status}</span>
         {orphaned && (
-          <span className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn" title={t('apps.inkwell.threadPopover.orphaned_title')}>{t('apps.inkwell.threadPopover.orphaned')}</span>
+          <span className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn-text" title={t('apps.inkwell.threadPopover.orphaned_title')}>{t('apps.inkwell.threadPopover.orphaned')}</span>
         )}
         {root.anchor?.quote && (
           <span className="flex-1 truncate text-muted italic" title={root.anchor.quote}>“{root.anchor.quote}”</span>
@@ -105,7 +105,7 @@ export default function ThreadPopover({
               {fence !== null && (
                 <pre
                   data-testid="inkwell-suggestion-preview"
-                  className="mt-1 rounded border border-success/40 bg-success/10 px-2 py-1 text-[11px] text-text whitespace-pre-wrap font-sans"
+                  className="mt-1 rounded border border-ok/40 bg-ok/10 px-2 py-1 text-[11px] text-text whitespace-pre-wrap font-sans"
                   title={t('apps.inkwell.threadPopover.suggestion_title')}
                 >{fence === '' ? t('apps.inkwell.threadPopover.suggestion_delete') : fence}</pre>
               )}
@@ -131,7 +131,7 @@ export default function ThreadPopover({
             <button type="button" onClick={onReopen} title={t('apps.inkwell.threadPopover.reopen_title')} className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text hover:bg-bg-hover cursor-pointer">{t('apps.inkwell.threadPopover.reopen')}</button>
           ) : suggestion !== undefined ? (
             <>
-              <button type="button" onClick={onAccept} disabled={orphaned} title={orphaned ? t('apps.inkwell.threadPopover.accept_title_orphaned') : t('apps.inkwell.threadPopover.accept_title')} className="rounded-md border border-success/40 bg-success/10 px-2 py-1 text-[11px] text-success hover:bg-success/20 cursor-pointer disabled:opacity-50 disabled:cursor-default">{t('apps.inkwell.threadPopover.accept')}</button>
+              <button type="button" onClick={onAccept} disabled={orphaned} title={orphaned ? t('apps.inkwell.threadPopover.accept_title_orphaned') : t('apps.inkwell.threadPopover.accept_title')} className="rounded-md border border-ok/40 bg-ok/10 px-2 py-1 text-[11px] text-ok-text hover:bg-ok/20 cursor-pointer disabled:opacity-50 disabled:cursor-default">{t('apps.inkwell.threadPopover.accept')}</button>
               <button type="button" onClick={onReject} title={t('apps.inkwell.threadPopover.reject_title')} className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-muted hover:text-text hover:bg-bg-hover cursor-pointer">{t('apps.inkwell.threadPopover.reject')}</button>
             </>
           ) : (

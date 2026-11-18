@@ -328,6 +328,9 @@ export default [
           // "Bench" build-mode classes and their drag/drop/target state hooks,
           // all le-prefixed so no generic state name is exempted repo-wide.
           'le-*',
+          // apps/inkwell/richEditor.css (imported by RichMarkdownEditor.tsx,
+          // outside index.css's @source graph): the rich editor's scope class.
+          'inkwell-*',
         ],
       }],
       'shadcn/require-static-classes': 'error',

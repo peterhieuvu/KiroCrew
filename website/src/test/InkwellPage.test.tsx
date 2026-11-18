@@ -88,7 +88,7 @@ vi.mock('../apps/inkwell/CoAuthorPanel', () => ({
 const DOC = {
   slug: 'notes', name: 'notes', kind: 'markdown',
   content: '# doc\n\nalpha line.\n\nomega line.\n',
-  content_sha256: 'sha-0', version: 1, tags: ['inkwell'],
+  content_token: 'sha-0', version: 1, tags: ['inkwell'],
 }
 
 beforeEach(() => {
@@ -101,7 +101,7 @@ beforeEach(() => {
   apiMock.artifact.mockResolvedValue(DOC)
   apiMock.artifactComments.mockResolvedValue({ comments: [] })
   apiMock.resolveComment.mockResolvedValue({})
-  saveDocMock.mockResolvedValue({ contentSha256: 'sha-1' })
+  saveDocMock.mockResolvedValue({ contentToken: 'sha-1' })
 })
 
 afterEach(() => {
@@ -153,7 +153,7 @@ describe('autosave', () => {
     const [slug, content, opts] = saveDocMock.mock.calls[0]
     expect(slug).toBe('notes')
     expect(content).toContain('user-edit')
-    expect(opts).toMatchObject({ expectedSha256: 'sha-0', snapshot: false })
+    expect(opts).toMatchObject({ expectedToken: 'sha-0', snapshot: false })
   })
 
   it('keeps dirty set when the save fails, so the next keystroke retries', async () => {
@@ -170,7 +170,7 @@ describe('conflict path', () => {
   // Post-phase-4, a bare 409 first attempts a 3-way merge; the loud banner
   // is now the OVERLAP outcome, so these tests make the server side collide
   // with the user's edit (same 'omega' line, different text).
-  const COLLIDING = { ...DOC, content: '# doc\n\nalpha line.\n\nomega agent-version.\n', content_sha256: 'sha-9' }
+  const COLLIDING = { ...DOC, content: '# doc\n\nalpha line.\n\nomega agent-version.\n', content_token: 'sha-9' }
 
   it('StaleDocError with overlapping edits raises the banner and does not clear dirty', async () => {
     saveDocMock.mockRejectedValueOnce(new StaleDocError('stale', 'sha-9'))
@@ -416,7 +416,7 @@ describe('popover dismissal and composer focus (sweep regressions, 2026-09-10)',
 })
 
 describe('leaving a document (sweep regressions, 2026-09-10)', () => {
-  const DOC_B = { ...DOC, slug: 'other', name: 'other', content: '# other\n\nbeta.\n', content_sha256: 'sha-b' }
+  const DOC_B = { ...DOC, slug: 'other', name: 'other', content: '# other\n\nbeta.\n', content_token: 'sha-b' }
 
   beforeEach(() => {
     apiMock.artifacts.mockResolvedValue({ artifacts: [DOC, DOC_B] })
@@ -460,10 +460,10 @@ describe('interleaved-edit merge (phase 4)', () => {
   it('409 → clean 3-way merge adopts, banners, and re-saves the merged text', async () => {
     // Disjoint regions: the user edits the 'omega' line (stub-type); the
     // server's copy changed the 'alpha' line.
-    const THEIRS = { ...DOC, content: '# doc\n\nalpha line, agent improved.\n\nomega line.\n', content_sha256: 'sha-9' }
+    const THEIRS = { ...DOC, content: '# doc\n\nalpha line, agent improved.\n\nomega line.\n', content_token: 'sha-9' }
     saveDocMock
       .mockRejectedValueOnce(new StaleDocError('stale', 'sha-9'))
-      .mockResolvedValue({ contentSha256: 'sha-10' })
+      .mockResolvedValue({ contentToken: 'sha-10' })
     await openDoc()
     apiMock.artifact.mockResolvedValue(THEIRS)
     fireEvent.click(screen.getByText('stub-type'))
@@ -476,13 +476,13 @@ describe('interleaved-edit merge (phase 4)', () => {
     const last = saveDocMock.mock.calls.at(-1)
     expect(last?.[1]).toContain('alpha line, agent improved.')
     expect(last?.[1]).toContain('omega user-edit')
-    expect(last?.[2]).toMatchObject({ expectedSha256: 'sha-9' })
+    expect(last?.[2]).toMatchObject({ expectedToken: 'sha-9' })
   })
 
   it('409 → overlapping edits keep the loud conflict banner, nothing dropped', async () => {
     saveDocMock.mockRejectedValueOnce(new StaleDocError('stale', 'sha-9'))
     await openDoc()
-    apiMock.artifact.mockResolvedValue({ ...DOC, content: '# doc\n\nalpha line.\n\nomega agent-version.\n', content_sha256: 'sha-9' })
+    apiMock.artifact.mockResolvedValue({ ...DOC, content: '# doc\n\nalpha line.\n\nomega agent-version.\n', content_token: 'sha-9' })
     fireEvent.click(screen.getByText('stub-type'))
     await act(async () => { await vi.advanceTimersByTimeAsync(900) })
     expect(screen.getByText(/Changed on the server/)).toBeInTheDocument()

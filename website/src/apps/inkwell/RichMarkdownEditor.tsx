@@ -258,6 +258,10 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
     })
   }
 
+  // Inline link field under the toolbar; null while closed. The editor keeps
+  // its selection while the field has focus, so applying re-targets it.
+  const [linkDraft, setLinkDraft] = useState<string | null>(null)
+
   if (!editor) return null
 
   // Gutter marker positions, derived each render from live decorations.
@@ -274,14 +278,12 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
     }))
   })()
 
-  const setLink = () => {
-    const prev = editor.getAttributes('link').href as string | undefined
-    // Prototype idiom (matches InkwellPage's createDoc): prompt over popover.
-    const url = window.prompt(t('apps.inkwell.editor.link_prompt'), prev || '')
-    if (url === null) return
+  const openLink = () => setLinkDraft((editor.getAttributes('link').href as string | undefined) ?? '')
+  const applyLink = (url: string) => {
+    setLinkDraft(null)
     const chain = editor.chain().focus().extendMarkRange('link')
-    if (url === '') chain.unsetLink().run()
-    else chain.setLink({ href: url }).run()
+    if (url.trim() === '') chain.unsetLink().run()
+    else chain.setLink({ href: url.trim() }).run()
   }
 
   const btnCls = (active: boolean) => (active ? 'text-accent bg-bg-hover' : 'text-muted hover:text-text')
@@ -300,7 +302,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
         <IconButton aria-label={t('apps.inkwell.editor.italic')} title={t('apps.inkwell.editor.italic_title')} disabled={disabled} onClick={() => editor.chain().focus().toggleItalic().run()} className={btnCls(editor.isActive('italic'))}><Italic size={15} /></IconButton>
         <IconButton aria-label={t('apps.inkwell.editor.strikethrough')} title={t('apps.inkwell.editor.strikethrough')} disabled={disabled} onClick={() => editor.chain().focus().toggleStrike().run()} className={btnCls(editor.isActive('strike'))}><Strikethrough size={15} /></IconButton>
         <IconButton aria-label={t('apps.inkwell.editor.inline_code')} title={t('apps.inkwell.editor.inline_code')} disabled={disabled} onClick={() => editor.chain().focus().toggleCode().run()} className={btnCls(editor.isActive('code'))}><Code size={15} /></IconButton>
-        <IconButton aria-label={t('apps.inkwell.editor.link')} title={t('apps.inkwell.editor.link')} disabled={disabled} onClick={setLink} className={btnCls(editor.isActive('link'))}><Link2 size={15} /></IconButton>
+        <IconButton aria-label={t('apps.inkwell.editor.link')} title={t('apps.inkwell.editor.link')} disabled={disabled} onClick={openLink} aria-expanded={linkDraft !== null} className={btnCls(editor.isActive('link'))}><Link2 size={15} /></IconButton>
         <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
         <IconButton aria-label={t('apps.inkwell.editor.bullet_list')} title={t('apps.inkwell.editor.bullet_list')} disabled={disabled} onClick={() => editor.chain().focus().toggleBulletList().run()} className={btnCls(editor.isActive('bulletList'))}><List size={15} /></IconButton>
         <IconButton aria-label={t('apps.inkwell.editor.numbered_list')} title={t('apps.inkwell.editor.numbered_list')} disabled={disabled} onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btnCls(editor.isActive('orderedList'))}><ListOrdered size={15} /></IconButton>
@@ -308,6 +310,24 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
         <IconButton aria-label={t('apps.inkwell.editor.code_block')} title={t('apps.inkwell.editor.code_block')} disabled={disabled} onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={btnCls(editor.isActive('codeBlock'))}><SquareCode size={15} /></IconButton>
         <IconButton aria-label={t('apps.inkwell.editor.horizontal_rule')} title={t('apps.inkwell.editor.horizontal_rule')} disabled={disabled} onClick={() => editor.chain().focus().setHorizontalRule().run()} className="text-muted hover:text-text"><Minus size={15} /></IconButton>
       </div>
+      {linkDraft !== null && (
+        <div className="border-b border-border px-2 py-1 shrink-0" data-testid="inkwell-link-field">
+          <input
+            type="url"
+            value={linkDraft}
+            onChange={e => setLinkDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); applyLink(linkDraft) }
+              else if (e.key === 'Escape') { e.preventDefault(); setLinkDraft(null); editor.commands.focus() }
+            }}
+            onBlur={() => setLinkDraft(null)}
+            autoFocus
+            aria-label={t('apps.inkwell.editor.link_prompt')}
+            placeholder={t('apps.inkwell.editor.link_prompt')}
+            className="w-full rounded-md border border-border bg-bg px-2 py-1 text-[12px] text-text outline-none focus-ring font-mono"
+          />
+        </div>
+      )}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions --
           Passive listeners only: the div relays clicks into the contenteditable
           (which owns focus and keyboard) and observes selection settle for the
@@ -336,7 +356,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, Props>(function 
             m.status === 'resolved'
               ? 'bg-transparent border-border border-dashed hover:bg-bg-hover'
               : m.status === 'review'
-                ? 'bg-success/30 border-success/60 hover:bg-success/60'
+                ? 'bg-ok/30 border-ok/60 hover:bg-ok/60'
                 : 'bg-accent/30 border-accent/60 hover:bg-accent/60'
           }`}
           style={{ top: m.top + 4 }}

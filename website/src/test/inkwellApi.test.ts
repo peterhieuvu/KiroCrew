@@ -1,7 +1,7 @@
 /**
  * Inkwell save layer — the one call that bypasses the shared api client
  * because it needs precise 409 handling for the optimistic-concurrency
- * token (#7818), capability-detected on pre-token gateways.
+ * token, which the store omits for file-backed and legacy records.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { saveDoc, StaleDocError } from '../apps/inkwell/api'
@@ -19,31 +19,31 @@ function mockFetchOnce(status: number, body: unknown) {
 afterEach(() => vi.restoreAllMocks())
 
 describe('saveDoc', () => {
-  it('autosave path: snapshot:false, no token sent when none held (pre-#7818)', async () => {
+  it('autosave path: snapshot:false, no token sent when none held (store served none)', async () => {
     const spy = mockFetchOnce(200, { version: 1 })
-    const r = await saveDoc('doc', '# x', { expectedSha256: null })
+    const r = await saveDoc('doc', '# x', { expectedToken: null })
     const [url, init] = spy.mock.calls[0]
     expect(url).toBe('/api/artifacts/doc')
     const body = JSON.parse((init as RequestInit).body as string)
     expect(body.snapshot).toBe(false)
-    expect('expected_sha256' in body).toBe(false)
-    expect(r.contentSha256).toBeNull() // capability absent — stays null
+    expect('expected_token' in body).toBe(false)
+    expect(r.contentToken).toBeNull() // no token served — stays null
   })
 
   it('carries the token when held, adopts the fresh one from the response', async () => {
-    const spy = mockFetchOnce(200, { content_sha256: 'bbb', version: 2 })
-    const r = await saveDoc('doc', 'text', { expectedSha256: 'aaa', snapshot: true })
+    const spy = mockFetchOnce(200, { content_token: 'bbb', version: 2 })
+    const r = await saveDoc('doc', 'text', { expectedToken: 'aaa', snapshot: true })
     const body = JSON.parse((spy.mock.calls[0][1] as RequestInit).body as string)
-    expect(body.expected_sha256).toBe('aaa')
+    expect(body.expected_token).toBe('aaa')
     expect(body.snapshot).toBe(true)
-    expect(r.contentSha256).toBe('bbb')
+    expect(r.contentToken).toBe('bbb')
   })
 
-  it('409 → StaleDocError carrying the server current hash', async () => {
-    mockFetchOnce(409, { error: 'stale write', current_sha256: 'ccc' })
-    const err = await saveDoc('doc', 'text', { expectedSha256: 'aaa' }).catch(e => e)
+  it('409 → StaleDocError carrying the server current token', async () => {
+    mockFetchOnce(409, { error: 'stale write', code: 'artifact_conflict', current_token: 'ccc' })
+    const err = await saveDoc('doc', 'text', { expectedToken: 'aaa' }).catch(e => e)
     expect(err).toBeInstanceOf(StaleDocError)
-    expect((err as StaleDocError).currentSha256).toBe('ccc')
+    expect((err as StaleDocError).currentToken).toBe('ccc')
   })
 
   it('non-409 failure → plain Error with the server detail', async () => {

@@ -32,6 +32,7 @@ const PINNED: Record<string, Counts> = {
   'src/apps/auto-improvement/lib/agentSession.ts': { announced: 0, keepTarget: 0, plain: 2, reason: 'awaited unwrap() flows with their own catch/recovery' },
   'src/apps/command-bar/CommandBarOverlayRootRows.tsx': { announced: 2, keepTarget: 0, plain: 0, reason: 'attention row and recent row announce' },
   'src/apps/command-bar/useCommandBarOverlayActivation.ts': { announced: 0, keepTarget: 1, plain: 0, reason: 'create path keeps target on the create/fetch race' },
+  'src/apps/inkwell/CoAuthorPanel.tsx': { announced: 0, keepTarget: 0, plain: 1, reason: 'panel binds to the slot bound to the open document, supplied programmatically' },
   'src/apps/issue-radar/lib/agentSession.ts': { announced: 0, keepTarget: 0, plain: 2, reason: 'awaited unwrap() flows with their own catch/recovery' },
   'src/apps/issue-radar/views/CrewPageView.tsx': { announced: 0, keepTarget: 0, plain: 1, reason: 'awaited unwrap() with page-level error handling' },
   'src/apps/papyrus/CoAuthorPanel.tsx': { announced: 0, keepTarget: 0, plain: 1, reason: 'panel binds to a slot supplied programmatically' },

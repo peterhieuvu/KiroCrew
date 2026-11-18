@@ -27,7 +27,7 @@ calls is a core endpoint:
 |---|---|
 | List / read / create documents | `GET /api/artifacts?tag=inkwell`, `GET /api/artifacts/{slug}`, `POST /api/artifacts` (handlers in `src/kiro_crew/dashboard/handlers/artifacts.py`) |
 | Save | `PATCH /api/artifacts/{slug}` — `snapshot: false` for autosave (live state, no version bump), `snapshot: true` for an explicit checkpoint |
-| Concurrency | `expected_sha256` optimistic-concurrency token when the gateway supplies `content_sha256`; capability-detected, last-write-wins otherwise |
+| Concurrency | The store's opaque `content_token`, echoed back as `expected_token` on PATCH; 409 `artifact_conflict` with `current_token` on a stale write. The store serves no token for live file-backed or legacy records, so those saves are last-write-wins |
 | Comments | `GET/POST /api/artifacts/{slug}/comments`, `/{id}/resolve` (resolve is human-only, enforced server-side) |
 | Co-author session | `POST /api/chat/slots` with the `artifact` binding; ephemeral scoping note via `POST /api/chat/slots/{key}/context` |
 | Context rail | `GET /api/knowledge/search-for-context?q=`, `GET /api/memory/semantic` — synchronous reads, no agent turn |

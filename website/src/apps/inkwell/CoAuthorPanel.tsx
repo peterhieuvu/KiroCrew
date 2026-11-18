@@ -63,7 +63,7 @@ export default function CoAuthorPanel({
           onClick={onClose}
           title={t('apps.inkwell.coAuthor.close_title')}
           aria-label={t('apps.inkwell.coAuthor.close_label')}
-          className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 cursor-pointer bg-transparent border-none transition-colors"
+          className="p-1 rounded text-muted hover:text-danger-text hover:bg-danger/10 cursor-pointer bg-transparent border-none transition-colors"
         >
           <X className="lucide-inline" />
         </button>

@@ -11,8 +11,8 @@
  *                  churn; md-notebook's flushSave discipline: unmount-flush,
  *                  dirty-stays-on-failure)
  *   - Snapshot   = explicit PATCH `snapshot: true` (numbered version)
- *   - Conflict   = #7818's `expected_sha256` token, capability-detected; the
- *                  token is held in a ref FROM EDIT START (its review lesson)
+ *   - Conflict   = the store's opaque `expected_token` (when it serves one);
+ *                  the token is held in a ref FROM EDIT START
  *   - Session    = slot `artifact` binding at create; resolution filters the
  *                  live Redux slot list (ArtifactDetailPage's pickBoundSlot
  *                  rule) — no mapping store, survives browser profiles
@@ -137,12 +137,12 @@ export default function InkwellPage() {
     }
   }, [])
 
-  // ── Concurrency token (#7818) ────────────────────────────────────────────
+  // ── Concurrency token ────────────────────────────────────────────────────
   // Held in a REF, captured when the loaded content was read — NOT re-derived
-  // at save time. Re-reading it from state at save time was the bug #7818's
-  // own review caught: a reload between edit start and save would rebase the
-  // token and let the save silently clobber what changed underneath.
-  const baseShaRef = useRef<string | null>(null)
+  // at save time. Re-reading it from state at save time would let a reload
+  // between edit start and save rebase the token, so the save would silently
+  // clobber what changed underneath.
+  const baseTokenRef = useRef<string | null>(null)
 
   // ── Session binding: derived, not stored ─────────────────────────────────
   const slots = useAppSelector(s => s.dashboard.slots)
@@ -169,7 +169,7 @@ export default function InkwellPage() {
       const d = (await api.artifact(slug)) as InkwellDoc
       setDoc(d)
       setBuffer(d.content ?? '')
-      baseShaRef.current = d.content_sha256 ?? null
+      baseTokenRef.current = d.content_token ?? null
       setDirty(false)
       setConflict(false)
       setError(null)
@@ -231,10 +231,10 @@ export default function InkwellPage() {
     const content = bufferRef.current
     try {
       const res = await saveDoc(d.slug, content, {
-        expectedSha256: baseShaRef.current,
+        expectedToken: baseTokenRef.current,
         snapshot,
       })
-      baseShaRef.current = res.contentSha256
+      baseTokenRef.current = res.contentToken
       // Only clear dirty if the buffer didn't move during the await — a
       // keystroke mid-flight means there is newer unsaved content.
       if (bufferRef.current === content) setDirty(false)
@@ -251,7 +251,7 @@ export default function InkwellPage() {
           const m = threeWayMerge(d.content ?? '', bufferRef.current, fresh.content ?? '')
           if (m.clean) {
             setDoc(fresh)
-            baseShaRef.current = fresh.content_sha256 ?? null
+            baseTokenRef.current = fresh.content_token ?? null
             setBuffer(m.merged)
             setDirty(true)
             setConflict(false)
@@ -419,7 +419,7 @@ export default function InkwellPage() {
             // Buffer already matches the server (agent made no change, or the
             // user typed exactly it): adopt cleanly, token included.
             setDoc(fresh)
-            baseShaRef.current = fresh.content_sha256 ?? null
+            baseTokenRef.current = fresh.content_token ?? null
             setDirty(false)
             setConflict(false)
           } else {
@@ -432,7 +432,7 @@ export default function InkwellPage() {
               // autosave persists it against the fresh token, so the merged
               // state becomes server truth through the normal path.
               setDoc(fresh)
-              baseShaRef.current = fresh.content_sha256 ?? null
+              baseTokenRef.current = fresh.content_token ?? null
               setBuffer(m.merged)
               setDirty(true)
               setConflict(false)
@@ -449,7 +449,7 @@ export default function InkwellPage() {
         } else {
           setDoc(fresh)
           setBuffer(fresh.content ?? '')
-          baseShaRef.current = fresh.content_sha256 ?? null
+          baseTokenRef.current = fresh.content_token ?? null
         }
         // The turn may have replied to / advanced threads: refresh them.
         void fetchThreads(doc.slug)
@@ -689,7 +689,7 @@ export default function InkwellPage() {
             </button>
           )}
           {merged && !conflict && (
-            <span className="text-[12px] text-success">
+            <span className="text-[12px] text-ok-text">
               {t('apps.inkwell.page.merged_notice')}
             </span>
           )}
@@ -736,7 +736,7 @@ export default function InkwellPage() {
           <div
             role="alert"
             data-testid="inkwell-lossy-banner"
-            className="px-3 py-2 text-[12px] border-b border-warning/40 bg-warning/10 text-text shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1"
+            className="px-3 py-2 text-[12px] border-b border-warn/40 bg-warn/10 text-text shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1"
           >
             <span>
               {[
@@ -865,7 +865,7 @@ export default function InkwellPage() {
                   focusThread === th.id ? 'bg-bg-hover' : ''
                 }`}
               >
-                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn" title={t('apps.inkwell.page.orphaned_title')}>{t('apps.inkwell.page.orphaned')}</span>
+                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide bg-warn/15 text-warn-text" title={t('apps.inkwell.page.orphaned_title')}>{t('apps.inkwell.page.orphaned')}</span>
                 <span className="flex-1 truncate text-text" title={th.body}>{th.is_agent ? '🤖 ' : ''}{th.body}</span>
               </button>
             ))}
