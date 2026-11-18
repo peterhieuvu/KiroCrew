@@ -46,6 +46,7 @@ from kiro_crew.dashboard.state import (
     _ChatSlot,
     _normalize_slot_key,
     append_and_surface,
+    durable_last_ts,
     parse_cls_meta,
 )
 from kiro_crew.execution_context import (
@@ -1304,7 +1305,18 @@ async def chat_done_payload(
         "slot": slot.key,
         "continuing": continuing,
         "needs_input": bool(slot._question_pending),
+        **chat_done_ts(slot),
     }
+
+
+def chat_done_ts(slot: _ChatSlot) -> dict[str, str]:
+    """``{"ts": ...}`` for a ``chat_done`` frame, or ``{}`` for an empty window.
+
+    The client watermarks a background slot's unread badge with this, so it
+    must name a row that survives a restart (:func:`durable_last_ts`).
+    """
+    ts = durable_last_ts(slot.messages)
+    return {"ts": ts} if ts else {}
 
 
 def wire_session_subagent_probe(state: DashboardState) -> None:

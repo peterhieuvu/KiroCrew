@@ -220,6 +220,25 @@ describe('slot_read over the dashboard socket', () => {
     expect(dash().unreadSlots).toContain(BACKGROUND)
   })
 
+  it('a chat_done badge watermarked at its own ts is cleared by a read at the slot\'s last_ts, echo included', () => {
+    // The stuck-dot regression: chat_done carried no ts, so the badge borrowed
+    // last_ts while it still pointed at the unpersisted `done` marker (~84ms
+    // past the final saved row). After a gateway restart last_ts fell back to
+    // that row, every read fell short, and the read's own echo re-lit the dot.
+    // The gateway now stamps chat_done with the final saved row's ts, and
+    // last_ts skips the marker, so both name the same instant across a restart.
+    const FINAL = '2026-09-16T02:23:45.008011+00:00'
+    const { ws } = mount()
+    testStore.dispatch(addSlotOptimistic({ key: BACKGROUND, last_ts: FINAL } as never))
+    act(() => { ws.simulateMessage({ type: 'chat_done', data: { slot: BACKGROUND, ts: FINAL } }) })
+    expect(dash().unreadSlots).toContain(BACKGROUND)
+    expect(dash().unreadSince[BACKGROUND]).toBe(FINAL)
+    act(() => { testStore.dispatch(markSlotRead(BACKGROUND)) })
+    act(() => { ws.simulateMessage({ type: 'slot_read', data: { slot: BACKGROUND, read_ts: FINAL } }) })
+    expect(dash().unreadSlots).not.toContain(BACKGROUND)
+    expect((JSON.parse(localStorage.getItem('mc-unread-shared') ?? '{}') as Record<string, string>)[BACKGROUND]).toBeUndefined()
+  })
+
   it('a manual mark-as-unread is never cleared by a remote read', () => {
     const { ws } = mount()
     testStore.dispatch(markSlotUnread(BACKGROUND))   // string form = manual reminder

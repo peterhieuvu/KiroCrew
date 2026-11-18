@@ -176,7 +176,15 @@ class SlotProjection:
         input the slot reads as idle while its owner is parked on an approval.
         Oldest first; the projection reads only the first one for the card.
         """
-        last_ts = slot.messages[-1].get("ts", "") if slot.messages else ""
+        # The turn-end ``done`` marker is skipped: it is never persisted, so
+        # counting it would move ``last_ts`` ~100ms past the final saved row
+        # and back again on restart, stranding any unread watermark taken from
+        # it. Chunk/queued/permission rows still count: mid-turn recency must
+        # keep advancing, and none of them trails the turn's final row.
+        last_ts = next(
+            (m.get("ts", "") for m in reversed(slot.messages) if m.get("role") != "done"),
+            "",
+        )
         last_msg = ""
         has_options = False
         options: list[str] = []

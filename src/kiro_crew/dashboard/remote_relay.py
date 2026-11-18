@@ -63,7 +63,7 @@ from aiohttp import web
 import kiro_crew
 from kiro_crew.apps.version import versions_compatible
 from kiro_crew.dashboard.chat_persistence import save_slot_off_loop
-from kiro_crew.dashboard.chat_utils import _redact_deep, chunk_generation
+from kiro_crew.dashboard.chat_utils import _redact_deep, chat_done_ts, chunk_generation
 from kiro_crew.dashboard.remote_mirror import MIRROR_CLS_PREFIX
 from kiro_crew.security import redact_credentials, redact_exfiltration_urls
 
@@ -856,7 +856,7 @@ async def relay_remote_turn(
             await save_slot_off_loop(state, slot)
             # The composer is unblocked by ``chat_done``, so skipping it on the
             # error paths would leave the session looking permanently busy.
-            state.broadcast_ws("chat_done", {"slot": slot.key})
+            state.broadcast_ws("chat_done", {"slot": slot.key, **chat_done_ts(slot)})
 
     # A message sent DURING a relayed turn is REFUSED — the busy branch of
     # ``api_chat`` returns 409 ``remote_turn_busy`` for a remote (or ``relay=1``)

@@ -16,7 +16,7 @@ import threading
 import time
 import traceback
 import uuid
-from collections.abc import Coroutine, Iterable, Iterator
+from collections.abc import Coroutine, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import datetime, timezone
@@ -1387,6 +1387,19 @@ def durable_row_count(rows: Iterable[dict]) -> int:
     never disagree about which rows are durable.
     """
     return sum(1 for m in rows if m.get("role") not in _TRANSIENT_ROLES)
+
+
+def durable_last_ts(rows: Sequence[dict]) -> str:
+    """The ``ts`` of the newest row in *rows* that survives a restart, or ``""``.
+
+    The timestamp a ``chat_done`` frame carries. Without it the client falls
+    back to the slot's ``last_ts``, and an unread watermark taken from a
+    transient row outlives that row: after a restart no read can reach it.
+    """
+    for m in reversed(rows):
+        if m.get("role") not in _TRANSIENT_ROLES and m.get("ts"):
+            return m["ts"]
+    return ""
 
 
 #: Roles that exist only on the wire: appended so a reader/flush can see them,
