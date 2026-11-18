@@ -9,7 +9,9 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Provider } from 'react-redux'
-import { MemoryRouter, Routes, Route, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useLocation, useSearchParams, useNavigate, unstable_HistoryRouter as HistoryRouter } from 'react-router-dom'
+import { UNSAFE_createMemoryHistory as createMemoryHistory } from 'react-router'
+import type { ReactNode } from 'react'
 import { createTestStore } from './helpers'
 import { switchSlot } from '../store/chatSlice'
 import { sseSlots } from '../store/dashboardSlice'
@@ -89,6 +91,15 @@ function detailCalls(): string[] {
 const slot = (key: string, title?: string, mode = ''): ChatSlot => ({
   key, title: title ?? key, messages: 0, running: false, mode, created: '', last_ts: '',
 })
+
+type MemoryHistory = ReturnType<typeof createMemoryHistory>
+
+/** MemoryRouter, or a HistoryRouter over a history the test holds. */
+function PopRouter({ history, children }: { history?: MemoryHistory; children: ReactNode }) {
+  return history
+    ? <HistoryRouter history={history}>{children}</HistoryRouter>
+    : <MemoryRouter initialEntries={['/chat']}>{children}</MemoryRouter>
+}
 
 /** Helper to capture the current URL from MemoryRouter */
 let currentUrl = ''
@@ -728,7 +739,7 @@ describe('ChatPage ?sid= URL parameter', () => {
   // the wrong session and goForward sticks. A NavController exposes the router's
   // navigate(); navigate(-1/+1) is a real POP (useNavigationType()==='POP').
   describe('browser Back/Forward (history POP) retrace', () => {
-    function renderForPop(initialSlots: ChatSlot[]) {
+    function renderForPop(initialSlots: ChatSlot[], history?: MemoryHistory) {
       const preload: PreloadState = {
         dashboard: {
           // connected: true is required — the POP-handler effect bails on
@@ -756,13 +767,13 @@ describe('ChatPage ?sid= URL parameter', () => {
         <QueryClientProvider client={qc}>
           <Provider store={store}>
             <ThemeProvider>
-              <MemoryRouter initialEntries={['/chat']}>
+              <PopRouter history={history}>
                 <Routes>
                   <Route path="/chat/:slug?" element={<ChatPage />} />
                 </Routes>
                 <UrlCapture />
                 <NavController />
-              </MemoryRouter>
+              </PopRouter>
             </ThemeProvider>
           </Provider>
         </QueryClientProvider>,
@@ -795,6 +806,55 @@ describe('ChatPage ?sid= URL parameter', () => {
       // Forward: A → B (the forward stack must not be corrupted and stuck).
       await act(async () => { navForward() })
       await waitFor(() => expect(store.getState().chat.activeSlot).toBe('chat-2-200'))
+    })
+
+    // Regression: New Session pushed TWO identical ?sid= entries, so the first
+    // Back after creating a session did nothing. The router commits location
+    // changes in a transition, so an urgent re-render right after our push
+    // re-ran the URL-sync effect against the OLD ?sid= and pushed again.
+    it('creating a session pushes exactly one history entry', async () => {
+      const navSlots = [slot('chat-1-100', 'Alpha'), slot('chat-2-200', 'Beta')]
+      // A real history, so the test can model the race: while armed, every
+      // PUSH is followed by an urgent store update (the live `slots` frame that
+      // announces a new session) that React renders BEFORE the router's
+      // transition commits the new location.
+      const history = createMemoryHistory({ initialEntries: ['/chat'], v5Compat: true })
+      let storeRef: ReturnType<typeof createTestStore> | null = null
+      let armed = false
+      const listen = history.listen.bind(history)
+      history.listen = (fn) => listen((update) => {
+        fn(update)
+        if (armed && update.action === 'PUSH' && storeRef) {
+          storeRef.dispatch(sseSlots(storeRef.getState().dashboard.slots.map(s => ({ ...s, last_activity_ts: 1 }))))
+        }
+      })
+      const { store } = renderForPop(navSlots, history)
+      storeRef = store
+
+      await waitFor(() => expect(store.getState().chat.activeSlot).toBe('chat-1-100'))
+      await act(async () => { await store.dispatch(switchSlot('chat-2-200')) })
+      await waitFor(() => expect(currentUrl).toContain('sid=chat-2-200'))
+      const indexBefore = history.index
+
+      // The same action the createSlot thunk resolves with: it activates the
+      // slot and adds its row in one commit.
+      armed = true
+      await act(async () => {
+        store.dispatch({
+          type: 'chat/createSlot/fulfilled',
+          payload: slot('chat-3-300', 'Gamma'),
+          meta: { requestId: 'create-1', originActiveSlot: 'chat-2-200', activate: true },
+        })
+      })
+      await waitFor(() => expect(currentUrl).toContain('sid=chat-3-300'))
+      armed = false
+      expect(history.index).toBe(indexBefore + 1)
+
+      // One Back must leave the new session. A duplicate entry would land on
+      // chat-3-300 again and leave the view where it was.
+      await act(async () => { navBack() })
+      await waitFor(() => expect(store.getState().chat.activeSlot).toBe('chat-2-200'))
+      await waitFor(() => expect(currentUrl).toContain('sid=chat-2-200'))
     })
 
     // Regression (URL-lock): after a Back/Forward POP, useNavigationType() stays

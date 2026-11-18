@@ -282,6 +282,9 @@ export function useChatPageSessionController({
   /** A push has been issued and its destination key is not minted yet — the sync
    *  effect records it on the commit that push lands in. */
   const pushedEntryPending = useRef(false)
+  /** Key of the entry the URL-sync effect last navigated FROM. While the
+   *  location still has this key, the router has not committed that navigate. */
+  const navigatedFromKey = useRef<string | null>(null)
   const [sidError, setSidError] = useState('')
   const [newSlotFailed, setNewSlotFailed] = useState(false)
   const [highlightTs, setHighlightTs] = useState<string | null>(null)
@@ -665,6 +668,13 @@ export function useChatPageSessionController({
     // localStorage hydration, WS updates) which would unwantedly bounce
     // the user back into chat view.
     if (embedMode === 'sessions') return
+    // Our last navigate has not landed yet. The router commits location changes
+    // in a transition, so an urgent render in between (e.g. the `slots` frame
+    // announcing a new session) re-runs this effect with the OLD location, and
+    // it would push the same entry a second time. Wait for the commit: it
+    // changes `locationKey`, which re-runs this effect with the real URL.
+    if (navigatedFromKey.current === locationKey) return
+    navigatedFromKey.current = null
     // Land the key claimed by our own push below. This effect re-runs on
     // `locationKey`, so the first run after that navigate is standing ON the
     // entry the push created — the Forward target. Placed ahead of every early
@@ -735,6 +745,7 @@ export function useChatPageSessionController({
       pushedSessionEntryKeys.current.add(locationKey)
       pushedEntryPending.current = true
     }
+    navigatedFromKey.current = locationKey
     navigate(`${basePath}${slug ? '/' + slug : ''}?${next}`, { replace })
     // `locationKey` and not just `locationPathname`: consuming the mobile
     // drawer's history entry lands on a DIFFERENT entry whose pathname is
